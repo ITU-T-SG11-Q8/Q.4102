@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+	body {
+		overflow: hidden;
+		margin: 0;
+		display: flex;
+		background-image: -webkit-radial-gradient(10% 0, farthest-side ellipse, #414e60 20%, #94a3b1);
+	}
+
+	text {
+		font-family: sans-serif;
+		pointer-events: none;
+	}
+</style>
+
+<body>
+	<div width="1200" height="1000" id="container">
+	</div>
+	<div>
+		<input type="button" onclick="loadItem()" value="load">
+		<input id="peer_id" type="number" value="0">
+		<input type="button" onclick="addItem()" value="add">
+		<input type="button" onclick="updateLink()" value="update_link">
+	</div>
+	</div>
+	<script src="./d3.v3.js"></script>
+	<script>
+		var width = 1200, height = 800;
+		var focus_node = null;
+		var highlight_node = null;
+
+		var color = d3.scale.category20c();
+		var highlight_trans = 0.1;
+
+		var size = d3.scale.pow().exponent(1)
+			.domain([1, 100])
+			.range([8, 24]);
+
+		var force = d3.layout.force()
+			.linkDistance(100)
+			.charge(-300)
+			.size([width, height]);
+
+		var seeder_node_color = "rgb(0,0,0)";
+		var primary_link_color = "rgb(31,119,180)";
+		var default_link_color = "rgb(255,127,14)";
+		var node_size = 40;
+		var text_size = 12;
+		var stroke_width = 2;
+		var svg = d3.select("#container").append("svg");
+		var g = svg.append("g");
+		var isExist = false;
+
+		var text = null;
+		var ticket_id = null;
+		var graph = null;
+		var node = null;
+		var link = null;
+		var linkedByIndex = {};
+
+		var ticket_id_count = 13;
+
+		function remove() {
+			if (isExist) {
+				g.selectAll(".link").remove();
+				g.selectAll(".node").remove();
+				g.selectAll(".text").remove();
+				g.selectAll(".ticket_id").remove();
+				force.stop();
+			}
+		}
+
+		function setLinkedByIndex() {
+			linkedByIndex = {};
+			graph.links.forEach(d => linkedByIndex[d.source.id + "," + d.target.id] = true);
+		}
+
+		function create(data) {
+			graph = data;
+			svg.attr("width", width).attr("height", height);
+			remove();
+			isExist = true;
+
+			svg.append("svg:defs").selectAll("marker")
+				.data(["start"])
+				.enter().append("svg:marker")
+				.attr("id", String)
+				.attr("viewBox", "0 -5 10 10")
+				.attr("refX", -12)
+				.attr("refY", 0)
+				.attr("markerWidth", 6)
+				.attr("markerHeight", 6)
+				.attr("orient", "auto")
+				.append("svg:path")
+				.attr("d", "M0,0L10,-5L10,5")
+				.style("fill", default_link_color);
+
+			svg.append("svg:defs").selectAll("marker")
+				.data(["end"])
+				.enter().append("svg:marker")
+				.attr("id", String)
+				.attr("viewBox", "0 -5 10 10")
+				.attr("refX", 20)
+				.attr("refY", 0)
+				.attr("markerWidth", 6)
+				.attr("markerHeight", 6)
+				.attr("orient", "auto")
+				.append("svg:path")
+				.attr("d", "M0,-5L10,0L0,5")
+				.style("fill", default_link_color);
+
+			graph.links = graph.links.map(l => {
+				var sourceNode = graph.nodes.find(n => {
+					return n.id === l.source;
+				});
+				var targetNode = graph.nodes.find(n => {
+					return n.id === l.target;
+				});
+				sourceNode.weight = 0;
+				targetNode.weight = 0;
+
+				return {
+					source: sourceNode,
+					target: targetNode,
+					primary: l.primary
+				};
+			});
+
+			force.nodes(graph.nodes)
+				.links(graph.links)
+				.start();
+
+			update();
+			setLinkedByIndex();
+
+			d3.select(window).on("mouseup", () => {
+				if (focus_node !== null) {
+					focus_node = null;
+					if (highlight_trans < 1) {
+						node.style("opacity", 1);
+						//node.style("stroke-opacity", 1);
+						text.style("opacity", 1);
+						ticket_id.style("opacity", 1);
+						link.style("opacity", 1);
+					}
+				}
+				if (highlight_node === null) {
+					exit_highlight();
+				};
+			});
+
+			force.on("tick", function () {
+				node.attr("transform", d => { return "translate(" + d.x + "," + d.y + ")"; });
+				text.attr("transform", d => { return "translate(" + d.x + "," + d.y + ")"; });
+				ticket_id.attr("transform", d => { return "translate(" + d.x + "," + d.y + ")"; });
+
+				link.attr("x1", d => { return d.source.x; })
+					.attr("y1", d => { return d.source.y; })
+					.attr("x2", d => { return d.target.x; })
+					.attr("y2", d => { return d.target.y; });
+
+				node.attr("cx", d => { return d.x; })
+					.attr("cy", d => { return d.y; });
+			});
+		}
+
+
+		function isConnected(a, b) {
+			return linkedByIndex[a.id + "," + b.id] || linkedByIndex[b.id + "," + a.id] || a.id == b.id;
+		}
+
+		function exit_highlight() {
+			highlight_node = null;
+			if (focus_node === null) {
+				svg.style("cursor", "default");
+				node.selectAll("path").style("stroke-opacity", 0);
+				text.style("font-weight", "normal");
+				ticket_id.style("font-weight", "normal");
+			}
+		}
+
+		function set_focus(d) {
+			if (highlight_trans < 1) {
+				node.style("opacity", o => {
+					return isConnected(d, o) ? 1 : highlight_trans;
+				});
+
+				text.style("opacity", o => {
+					return isConnected(d, o) ? 1 : highlight_trans;
+				});
+
+				ticket_id.style("opacity", o => {
+					return isConnected(d, o) ? 1 : highlight_trans;
+				});
+
+				link.style("opacity", o => {
+					return o.source.index == d.index || o.target.index == d.index ? 1 : highlight_trans;
+				});
+			}
+		}
+
+		function set_highlight(d) {
+			svg.style("cursor", "pointer");
+			if (focus_node !== null) {
+				d = focus_node;
+			};
+			highlight_node = d;
+
+			node.selectAll("path").style("stroke-opacity", o => {
+				return d == o ? 1 : 0;
+			});
+			text.style("font-weight", o => {
+				return d == o ? "bold" : "normal";
+			});
+			ticket_id.style("font-weight", o => {
+				return d == o ? "bold" : "normal";
+			});
+		}
+
+		function loadItem() {
+			d3.json("graph.json", (error, graph) => {
+				if (error == null && graph != null) {
+					create(graph);
+				}
+			});
+		}
+
+		function clearItem() {
+			link = link.data([]);
+			link.exit().remove();
+
+			node = node.data([]);
+			node.exit().remove();
+
+			text = text.data([]);
+			text.exit().remove();
+
+			ticket_id = ticket_id.data([]);
+			ticket_id.exit().remove();
+
+		}
+
+		function updateLink() {
+			var index = document.getElementById("peer_id").value
+			if (index > 0 && graph.nodes.length >= index) {
+				var find = graph.nodes[index - 1];
+				graph.links.map(l => {
+					if (l.source.id == find.id || l.target.id == find.id) {
+						l.primary = !l.primary;
+					}
+				});
+			}
+
+			update(true);
+			setLinkedByIndex();
+			force.nodes(graph.nodes)
+				.links(graph.links)
+				.start();
+		}
+
+		function addItem() {
+			var newPeer = { "id": "peer" + ticket_id_count, "ticket_id": ticket_id_count++ };
+			var index = document.getElementById("peer_id").value
+
+			if (index > 0 && graph.nodes.length >= index) {
+				var newLink = {
+					source: graph.nodes[index - 1],
+					target: newPeer,
+					primary: false
+				}
+				graph.links.push(newLink);
+			}
+			graph.nodes.push(newPeer);
+
+			update(true);
+			setLinkedByIndex();
+			force.nodes(graph.nodes)
+				.links(graph.links)
+				.start();
+		}
+
+		function removeItem(id) {
+			removeNode(id);
+			removeLink(id);
+
+			update(true);
+			setLinkedByIndex();
+
+			force.nodes(graph.nodes)
+				.links(graph.links)
+				.start();
+		}
+
+		function removeNode(id) {
+			graph.nodes = graph.nodes.filter(n => n.id !== id);
+		}
+
+		function removeLink(id) {
+			graph.links = graph.links.filter(l => l.source.id !== id && l.target.id !== id);
+		}
+
+		function update(flag) {
+			if (flag) {
+				clearItem();
+			}
+
+			link = g.selectAll(".link").data(graph.links);
+			link.enter().append("line")
+				.attr("class", "link")
+				.style("stroke-width", stroke_width)
+				.style("stroke-dasharray", d => { return d.primary ? "1,0" : "2,2"; })
+				.style("stroke", d => { return d.primary ? primary_link_color : default_link_color; })
+				.attr("marker-start", d => { return d.primary ? null : "url(#start)"; });
+			//.attr("marker-end", "url(#end)");
+
+			node = g.selectAll(".node").data(graph.nodes);
+			node.enter().append("g")
+				.attr("class", "node")
+				.call(force.drag)
+				.append("path")
+				.attr("d", d3.svg.symbol()
+					.size(d => { return Math.PI * Math.pow(size(node_size), 2); })
+					.type(d => { return d.type; }))
+				.style("fill", d => { return d.seeder ? seeder_node_color : color(d.ticket_id); })
+				.style("stroke-width", stroke_width)
+				.style("stroke-opacity", 0)
+				.style("stroke", "white");
+
+			text = g.selectAll(".text").data(graph.nodes);
+			text.enter().append("text")
+				.attr("class", "text")
+				.attr("dy", ".35em")
+				.style("font-size", d => { return d.seeder ? "13px" : text_size + "px"; })
+				.style("fill", "white")
+				.attr("dx", size(node_size))
+				.text(d => { return '\u2002' + d.id; });
+
+			ticket_id = g.selectAll(".ticket_id").data(graph.nodes);
+			ticket_id.enter().append("text")
+				.attr("class", "ticket_id")
+				.attr("dy", ".35em")
+				.style("font-size", "11px")
+				.style("fill", "white")
+				.style("font-weight", "bold")
+				.style("text-anchor", "middle")
+				.text(d => { return d.ticket_id; });
+
+			node.on("mouseover", d => set_highlight(d))
+				.on("mousedown", d => {
+					d3.event.stopPropagation();
+					focus_node = d;
+					set_focus(d);
+					if (highlight_node === null) {
+						set_highlight(d);
+					}
+				}).on("mouseout", d => exit_highlight());
+
+			node.on("dblclick", d => {
+				removeItem(d.id);
+			});
+
+			link.on("click", l => {
+				l.primary = !l.primary;
+				update(true);
+				setLinkedByIndex();
+				force.nodes(graph.nodes)
+					.links(graph.links)
+					.start();
+			});
+		}
+
+	</script>

@@ -1,0 +1,5 @@
+pip install Flask
+pip install flask-restful
+pip install PyMySQL
+pip install schedule
+pip install websockets

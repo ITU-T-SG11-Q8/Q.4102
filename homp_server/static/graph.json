@@ -1,0 +1,31 @@
+{
+  "graph": [],
+  "nodes": [
+    {"id": "Seeder", "ticket_id" : 1, "seeder":true},
+    {"id": "Peer1", "ticket_id" : 2},
+    {"id": "Peer2", "ticket_id" : 3},
+    {"id": "Peer3", "ticket_id" : 4},
+    {"id": "Peer4", "ticket_id" : 5},
+    {"id": "Peer5", "ticket_id" : 6},
+    {"id": "Peer6", "ticket_id" : 7},
+    {"id": "Peer7", "ticket_id" : 8},
+    {"id": "Peer8", "ticket_id" : 9},
+    {"id": "Peer9", "ticket_id" : 10},
+    {"id": "Peer10", "ticket_id" : 11},
+    {"id": "No Link", "ticket_id" : 12}
+  ],
+  "links": [
+    {"source": "Seeder", "target": "Peer1", "primary": false},
+    {"source": "Seeder", "target": "Peer2", "primary": true},
+    {"source": "Peer1", "target": "Peer3", "primary": true},
+    {"source": "Peer2", "target": "Peer4", "primary": false},
+    {"source": "Peer2", "target": "Peer5", "primary": true},
+    {"source": "Peer1", "target": "Peer6", "primary": true},
+    {"source": "Peer1", "target": "Peer7", "primary": false},
+    {"source": "Peer4", "target": "Peer8", "primary": true},
+    {"source": "Peer5", "target": "Peer9", "primary": false},
+    {"source": "Peer6", "target": "Peer10", "primary": true}
+  ],
+  "directed": false,
+  "multigraph": true
+}
