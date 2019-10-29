@@ -39,7 +39,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
 
             while request_message:
                 # print('\n++++++++[HOPP] OUT_GOING RECEIVED', request_message.header)
-                socket_peer_id = self.peer_manager.get_peer_id_by_socket(sock)
+                socket_peer_id = self.peer_manager.get_peer_id_by_connection(sock)
 
                 # HELLO_PEER
                 if MessageType.REQUEST_HELLO_PEER == request_message.message_type:
@@ -116,9 +116,9 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
         self.clear_connection(socket_peer_id, is_out_going)
 
     @classmethod
-    def get_peer_id_by_socket(cls, sock):
+    def get_peer_id_by_connection(cls, sock):
         peer_manager: TcpPeerConnectionManager = Factory.instance().get_peer_manager()
-        return peer_manager.get_peer_id_by_socket(sock)
+        return peer_manager.get_peer_id_by_connection(sock)
 
     @classmethod
     def convert_bytes_to_message(cls, conn):
@@ -283,7 +283,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
 
             while request_message:
                 # print('\n++++++++[HOPP] IN_COMING RECEIVED ', request_message.header)
-                socket_peer_id = self.peer_manager.get_peer_id_by_socket(sock)
+                socket_peer_id = self.peer_manager.get_peer_id_by_connection(sock)
                 # if MessageType.REQUEST_HELLO_PEER == request_message.message_type:
                 #     self.received_hello_peer(sock, request_message, is_out_going)
                 # if MessageType.REQUEST_ESTAB_PEER == request_message.message_type:
