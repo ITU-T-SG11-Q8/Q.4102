@@ -9,8 +9,8 @@ class TcpPeerConnectionManager(PeerConnectionManager):
     def get_peer_id_by_connection(self, connection):
         result_peer_id = None
         for peer_id in self.peers:
-            connection: PeerConnection = self.peers[peer_id]
-            if connection.connection == connection:
+            peer_connection: PeerConnection = self.peers[peer_id]
+            if peer_connection.connection == connection:
                 result_peer_id = peer_id
                 break
 
