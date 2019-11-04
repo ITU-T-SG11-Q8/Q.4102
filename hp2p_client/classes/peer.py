@@ -22,8 +22,8 @@ class Peer:
         self.auth_password = None
         self.peer_expires = 3600
 
-        self.mode = None
-        self.use_tcp_server = None
+        self.is_tcp = None
+        self.is_auto = True
 
         self.tcp_server_ip = None
         self.tcp_server_port = None
@@ -32,19 +32,19 @@ class Peer:
         self.web_socket_server_port = None
 
     def get_address(self):
-        if self.use_tcp_server is None:
+        if self.is_tcp is None:
             return None
-        elif self.use_tcp_server:
+        elif self.is_tcp:
             return 'tcp://{0}:{1}'.format(self.tcp_server_ip, self.tcp_server_port)
         else:
             return 'ws://{0}:{1}'.format(self.web_socket_server_ip, self.web_socket_server_port)
 
     def set_tcp_server_info(self, ip, port):
-        self.use_tcp_server = True
+        self.is_tcp = True
         self.tcp_server_ip = ip
         self.tcp_server_port = port
 
     def set_web_socket_server_info(self, ip, port):
-        self.use_tcp_server = False
+        self.is_tcp = False
         self.web_socket_server_ip = ip
         self.web_socket_server_port = port

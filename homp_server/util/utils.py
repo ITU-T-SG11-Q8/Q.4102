@@ -2,6 +2,7 @@ from database.db_connector import DBConnector
 from data.factory import Factory
 from classes.overlay import Overlay
 from classes.peer import Peer
+import json
 
 
 class Utils:
@@ -32,6 +33,8 @@ class Utils:
                 peer.expires = select_peer.get('expires')
                 peer.peer_id = peer_id
                 peer.ticket_id = ticket_id
+                if select_peer.get('costmap') is not None:
+                    peer.costmap = json.loads(select_peer.get('costmap'))
                 overlay.add_peer(peer_id, peer)
 
             Factory.instance().set_overlay(overlay_id, overlay)

@@ -37,7 +37,7 @@ class HybridOverlayCreation(Resource):
             auth_admin_key = overlay_auth.get('admin_key')
             auth_access_key = None
             auth_peer_list = []
-            overlay_status = 'active'  # TODO => overlay_status 값은 어떻게 정해지고 관리되는지...?
+            overlay_status = 'active'
 
             if auth_type is None or (auth_type != 'closed' and auth_type != 'open') or auth_admin_key is None:
                 raise ValueError
@@ -94,8 +94,9 @@ class HybridOverlayCreation(Resource):
                 new_overlay.update_time = datetime.now()
 
             Factory.instance().set_overlay(overlay_id, new_overlay)
-            # TODO => WebSocket 메시지 전송->Overlay 추가 / 브라우저 D3 관계도 업데이트
+            Factory.instance().get_web_socket_handler().send_create_overlay_message(overlay_id)
 
+            # TODO - Overlay expires 관리 / 추가
             db_connector.commit()
             return result, 200
         except ValueError:
@@ -277,6 +278,8 @@ class HybridOverlayModification(Resource):
             if get_overlay.expires > 0:
                 get_overlay.update_time = datetime.now()
 
+            # TODO - Overlay expires 관리 / 갱신
+
             db_connector.commit()
             return result, 200
         except ValueError:
@@ -314,13 +317,54 @@ class HybridOverlayRemoval(Resource):
             db_connector.delete("DELETE FROM hp2p_peer WHERE overlay_id = %s", (overlay_id,))
             db_connector.delete("DELETE FROM hp2p_overlay WHERE overlay_id = %s", (overlay_id,))
 
-            # TODO => WebSocket 메시지 전송->Overlay 삭제 / 브라우저 D3 관계도 업데이트
             Factory.instance().delete_overlay(overlay_id)
+            Factory.instance().get_web_socket_handler().send_remove_overlay_message(overlay_id)
 
             result = {
                 'overlay_id': overlay_id
             }
             db_connector.commit()
+            # TODO - Overlay expires 관리 / 제거
+            return result, 200
+        except ValueError:
+            db_connector.rollback()
+            return 'BAD REQUEST', 400
+        except Exception as exception:
+            db_connector.rollback()
+            return str(exception), 500
+
+
+class ApiHybridOverlayRemoval(Resource):
+    def post(self):
+        print("[SERVER] API Call HybridOverlayRemoval", flush=True)
+        db_connector = DBConnector()
+        try:
+            request_data = request.get_json()
+            overlay_id = request_data.get('overlay_id')
+
+            if overlay_id is None:
+                raise ValueError
+
+            query = "SELECT " \
+                    "overlay_id, expires, overlay_status, auth_type " \
+                    "FROM hp2p_overlay " \
+                    "WHERE overlay_id = %s"
+            select_overlay = db_connector.select_one(query, (overlay_id,))
+
+            if select_overlay is None:
+                raise ValueError
+
+            db_connector.delete("DELETE FROM hp2p_auth_peer WHERE overlay_id = %s", (overlay_id,))
+            db_connector.delete("DELETE FROM hp2p_peer WHERE overlay_id = %s", (overlay_id,))
+            db_connector.delete("DELETE FROM hp2p_overlay WHERE overlay_id = %s", (overlay_id,))
+
+            Factory.instance().delete_overlay(overlay_id)
+            Factory.instance().get_web_socket_handler().send_remove_overlay_message(overlay_id)
+            result = {
+                'overlay_id': overlay_id
+            }
+            db_connector.commit()
+            # TODO - Overlay expires 관리 / 제거
             return result, 200
         except ValueError:
             db_connector.rollback()

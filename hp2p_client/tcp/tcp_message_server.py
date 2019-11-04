@@ -6,12 +6,12 @@ import json
 import operator
 from datetime import datetime
 
-from data.factory import Factory, Peer, HompMessageHandler
-from heartbeat_scheduler import HeartScheduler
-from classes.constants import MessageType
 from config import PEER_CONFIG
+from data.factory import Factory, Peer, HompMessageHandler
+from data.heartbeat_scheduler import HeartScheduler
 from classes.hopp_message import HoppMessage
-from data.tcp_peer_connection_manager import TcpPeerConnectionManager, PeerConnection
+from classes.constants import MessageType
+from tcp.tcp_peer_connection_manager import TcpPeerConnectionManager, PeerConnection
 
 
 class TcpMessageHandler(socketserver.BaseRequestHandler):
@@ -31,10 +31,10 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
         socket_ip = self.client_address[0]
         socket_port = self.client_address[1]
         socket_peer_id = None
+        is_out_going = True
 
         try:
             sock = self.request
-            is_out_going = True
             request_message = self.convert_bytes_to_message(sock)
 
             while request_message:
@@ -276,9 +276,9 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
         socket_ip = sock.getsockname()[0]
         socket_port = sock.getsockname()[1]
         socket_peer_id = None
+        is_out_going = False
 
         try:
-            is_out_going = False
             request_message = self.convert_bytes_to_message(sock)
 
             while request_message:
@@ -397,6 +397,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 if establish_socket is not None:
                     self.peer_manager.add_peer(target_peer_id, target_ticket_id, False, False, establish_socket,
                                                target_address)
+                    self.send_report()
                     self.run_threading_received_socket(target_peer_id, establish_socket)
                 else:
                     self.peer_manager.un_assignment_peer(target_peer_id)
@@ -431,6 +432,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 if establish_socket is not None:
                     self.peer_manager.add_peer(target_peer_id, target_ticket_id, False, False, establish_socket,
                                                target_address)
+                    self.send_report()
                     self.run_threading_received_socket(target_peer_id, establish_socket)
                 else:
                     self.peer_manager.un_assignment_peer(target_peer_id)
@@ -459,6 +461,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
             if is_established:
                 estab_response_message['RspCode'] = MessageType.RESPONSE_ESTAB_PEER
                 self.peer_manager.add_peer(target_peer_id, target_ticket_id, False, True, sock)
+                self.send_report()
             else:
                 self.send_to_all_probe_peer()
 

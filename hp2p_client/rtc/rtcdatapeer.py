@@ -1,14 +1,25 @@
 from pyee import EventEmitter
 from aiortc import RTCPeerConnection
 from rtc.rtcsessiondescriptionex import RTCSessionDescriptionEx
+from datetime import datetime
+import json
 
 
 class RTCDataPeer(EventEmitter):
-    def __init__(self, id, toId):
+    def __init__(self, _id, from_ticket_id, to_id, ticket_id, is_primary, is_parent):
         super().__init__()
-        self.__id = id
-        self.__connectedId = toId
+        self.__id = _id
+        self.__from_ticket_id = from_ticket_id
+        self.__connectedId = to_id
         self.__isDataChannelOpened = False
+        self.__is_outgoing = False
+
+        self.ticket_id = ticket_id
+        self.is_primary = is_primary
+        self.is_parent = is_parent
+        self.priority = None
+        self.update_time = datetime.now()
+
         self.__peerConnection = RTCPeerConnection()
         self.__dataChannel = None
         self.__peerConnection.on('datachannel', self.__on_dataChannel)
@@ -19,6 +30,7 @@ class RTCDataPeer(EventEmitter):
             if self.__peerConnection.iceConnectionState == 'failed':
                 print(self.__connectedId + ' disconnected!!!!')
                 self.__isDataChannelOpened = False
+                self.__handle_connection()
 
         @self.__peerConnection.on('track')
         def on_track(track):
@@ -44,22 +56,34 @@ class RTCDataPeer(EventEmitter):
     def isDataChannelOpened(self):
         return self.__isDataChannelOpened
 
+    @property
+    def is_outgoing(self):
+        return self.__is_outgoing
+
     def __handle_data(self, msg):
         # print(self.__connectedId + ' : ' + msg)
         # while (self.__dataChannel.bufferedAmount <= self.__dataChannel.bufferedAmountLowThreshold):
         #    self.__dataChannel.send(name)
         self.emit('message', self, msg)
 
+    def __handle_connection(self):
+        # print(self.__connectedId + ' : ' + msg)
+        # while (self.__dataChannel.bufferedAmount <= self.__dataChannel.bufferedAmountLowThreshold):
+        #    self.__dataChannel.send(name)
+        self.emit('connection', self)
+
     def __setEventDataChannel(self):
         @self.__dataChannel.on('open')
         def on_open():
             print('DataChannel opened with ' + self.__connectedId)
             self.__isDataChannelOpened = True
+            self.__handle_connection()
 
         @self.__dataChannel.on('ended')
         def on_ended():
             print('DataChannel ended with ' + self.__connectedId)
             self.__isDataChannelOpened = False
+            self.__handle_connection()
 
         self.__dataChannel.on('message', self.__handle_data)
 
@@ -70,6 +94,8 @@ class RTCDataPeer(EventEmitter):
         self.__setEventDataChannel()
         print('DataChannel opened with ' + self.__connectedId)
         self.__isDataChannelOpened = True
+        self.__is_outgoing = True
+        self.__handle_connection()
 
     def createDataChannel(self, channelName='datachannel'):
         self.__dataChannel = self.__peerConnection.createDataChannel(channelName)
@@ -81,6 +107,7 @@ class RTCDataPeer(EventEmitter):
         rsde = RTCSessionDescriptionEx.copy(self.__peerConnection.localDescription)
         rsde.fromid = self.__id
         rsde.toid = self.__connectedId
+        rsde.fromticketid = self.__from_ticket_id
 
         return rsde
 
@@ -93,11 +120,12 @@ class RTCDataPeer(EventEmitter):
             rsde = RTCSessionDescriptionEx.copy(self.__peerConnection.localDescription)
             rsde.fromid = self.__id
             rsde.toid = msg.fromid
+            rsde.fromticketid = self.__from_ticket_id
             return rsde
 
     def sendMessage(self, msg):
         if self.isDataChannelOpened:
-            self.__dataChannel.send(msg)
+            self.__dataChannel.send(json.dumps(msg))
 
     async def close(self):
         if self.__dataChannel is not None:

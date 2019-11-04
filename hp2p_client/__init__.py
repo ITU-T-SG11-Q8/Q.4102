@@ -2,9 +2,9 @@ import threading
 
 from data.factory import Factory, Peer, HompMessageHandler
 from config import CLIENT_CONFIG
-from data.tcp_peer_connection_manager import TcpPeerConnectionManager
+from tcp.tcp_peer_connection_manager import TcpPeerConnectionManager
 from tcp.tcp_message_server import TcpMessageHandler, TcpThreadingSocketServer
-from rtcdata import RTCData
+from rtc.rtcdata import RTCData
 
 
 def run_client_cli(peer: Peer, handler: HompMessageHandler):
@@ -73,6 +73,7 @@ def creation_and_join(peer: Peer, handler: HompMessageHandler):
                         creation_and_join(peer, handler)
                     else:
                         TcpMessageHandler.run_heartbeat_scheduler()
+
                         if len(join_response) > 0:
                             for peer_info in join_response:
                                 target_peer_id = peer_info.get('peer_id')

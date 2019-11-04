@@ -8,6 +8,7 @@ from config import HOMS_CONFIG
 import json
 import math
 from datetime import datetime
+import threading
 
 
 class HybridOverlayJoin(Resource):
@@ -145,8 +146,9 @@ class HybridOverlayJoin(Resource):
                 del result['heartbeat_timeout']
                 del result['ticket_id']
 
-            # TODO => WebSocket 메시지 전송->Peer 추가 / 브라우저 D3 관계도 업데이트
             db_connector.commit()
+            Factory.instance().get_web_socket_handler().send_add_peer_message(overlay_id, peer_id, ticket_id)
+            # TODO - Peer expires 관리 / 추가
             return result, status_code
         except ValueError:
             db_connector.rollback()
@@ -217,11 +219,11 @@ class HybridOverlayReport(Resource):
                 raise ValueError
 
             if get_peer.costmap != costmap:
-                # TODO => WebSocket 메시지 전송->Peer 상태 갱신 / 브라우저 D3 관계도 업데이트
                 get_peer.num_primary = num_primary
                 get_peer.num_in_candidate = num_in_candidate
                 get_peer.num_out_candidate = num_out_candidate
                 get_peer.costmap = costmap
+                Factory.instance().get_web_socket_handler().send_update_peer_message(overlay_id, costmap)
 
                 update_peer_query = "UPDATE hp2p_peer SET " \
                                     "num_primary = %s, num_out_candidate = %s, " \
@@ -234,7 +236,6 @@ class HybridOverlayReport(Resource):
             result = {
                 'overlay_id': overlay_id
             }
-
             db_connector.commit()
             return result, 200
         except ValueError:
@@ -321,7 +322,7 @@ class HybridOverlayRefresh(Resource):
                 'overlay_id': overlay_id,
                 'expires': expires
             }
-
+            # TODO - Peer expires 관리 / 갱신
             db_connector.commit()
             return result, 200
         except ValueError:
@@ -382,7 +383,8 @@ class HybridOverlayLeave(Resource):
             result = {
                 'overlay_id': overlay_id,
             }
-            # TODO => WebSocket 메시지 전송->Peer 삭제 / 브라우저 D3 관계도 업데이트
+            Factory.instance().get_web_socket_handler().send_delete_peer_message(overlay_id, peer_id)
+            # TODO - Peer expires 관리 / 삭제
             db_connector.commit()
             return result, 200
         except ValueError:

@@ -1,6 +1,6 @@
 from classes.peer import Peer
 from classes.singleton_instance import SingletonInstance
-from handler.homp_handler import HompMessageHandler
+from homp.homp_message_handler import HompMessageHandler
 
 
 class Factory(SingletonInstance):
@@ -11,7 +11,7 @@ class Factory(SingletonInstance):
         self._peer_manager = None
         self._tcp_message_handler = None
         self._heartbeat_scheduler = None
-        self._rtc_connection = None
+        self._rtc_hp2p_client = None
         self._mode = None
 
     def get_tcp_server(self):
@@ -19,6 +19,7 @@ class Factory(SingletonInstance):
 
     def set_tcp_server(self, tcp_server):
         self._tcp_server = tcp_server
+        self._mode = 1
 
     def get_peer_manager(self):
         return self._peer_manager
@@ -44,11 +45,11 @@ class Factory(SingletonInstance):
     def set_heartbeat_scheduler(self, scheduler):
         self._heartbeat_scheduler = scheduler
 
-    def get_rtc_connection(self):
-        return self._rtc_connection
+    def get_rtc_hp2p_client(self):
+        return self._rtc_hp2p_client
 
-    def set_rtc_connection(self, rtc_connection):
-        self._rtc_connection = rtc_connection
+    def set_rtc_hp2p_client(self, rtc_hp2p_client):
+        self._rtc_hp2p_client = rtc_hp2p_client
         self._mode = 2
 
     def is_used_tcp(self):

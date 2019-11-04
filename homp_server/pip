@@ -3,3 +3,4 @@ pip install flask-restful
 pip install PyMySQL
 pip install schedule
 pip install websockets
+pip install simple-websocket-server

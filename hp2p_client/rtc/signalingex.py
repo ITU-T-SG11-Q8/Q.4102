@@ -15,6 +15,7 @@ def object_from_string(message_str):
         return RTCSessionDescriptionEx(**message)
     if 'action' in message:
         return message
+
     if message['type'] in ['answer', 'offer']:
         return RTCSessionDescription(**message)
     elif message['type'] == 'candidate':
@@ -29,6 +30,7 @@ def object_to_string(obj):
         message = {
             'fromid': obj.fromid,
             'toid': obj.toid,
+            'fromticketid': obj.fromticketid,
             'sdp': obj.sdp,
             'type': obj.type
         }
@@ -216,7 +218,7 @@ class WebsocketSignaling:
         return ret
 
     async def send(self, descr):
-        print('send signal')
+        # print('send signal')
         data = object_to_string(descr)
         await self._websocket.send(data + '\n')
 
