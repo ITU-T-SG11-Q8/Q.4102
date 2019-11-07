@@ -4,7 +4,7 @@
 
 ### usage
 
->$ python __init__.py
+>$ python &#95;&#95;init&#95;&#95;.py
 
 ## HPEER
 
@@ -28,11 +28,11 @@
 
 ### usage example
 * Overlay Owner
->$ python client.py -id=seeder -connection=tcp -owner=true
+ >$ python client.py -id=seeder -connection=tcp -owner=true
 
 * Overlay Participants
 
   * Join to latest channel (For easy testing)
-  >$ python client.py 
+   >$ python client.py 
 
 
