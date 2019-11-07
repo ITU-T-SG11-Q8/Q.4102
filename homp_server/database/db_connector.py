@@ -5,6 +5,7 @@ import pymysql
 class DBConnector:
     def __init__(self):
         # print('__init__', self.__class__.__name__)
+        print(DATABASE_CONFIG["DB_HOST"], DATABASE_CONFIG["DB_USER"]);
         self.connect = pymysql.connect(host=DATABASE_CONFIG["DB_HOST"], port=DATABASE_CONFIG["DB_PORT"],
                                        db=DATABASE_CONFIG["DB_DATABASE"],
                                        user=DATABASE_CONFIG["DB_USER"], password=DATABASE_CONFIG["DB_PASS"],

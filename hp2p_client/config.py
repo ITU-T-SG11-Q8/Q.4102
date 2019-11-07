@@ -6,9 +6,9 @@ CLIENT_CONFIG = {
 }
 
 PEER_CONFIG = {
-    'MAX_PRIMARY_CONNECTION': 10,  # Primary 최대 연결수
-    'MAX_INCOMING_CANDIDATE': 10,  # Incoming 최대 연결수
-    'MAX_OUTGOING_CANDIDATE': 10,  # Outgoing 최대 연결수
+    'MAX_PRIMARY_CONNECTION': 5,  # Primary 최대 연결수
+    'MAX_INCOMING_CANDIDATE': 5,  # Incoming 최대 연결수
+    'MAX_OUTGOING_CANDIDATE': 5,  # Outgoing 최대 연결수
     'PEER_TTL': 3,  # Hello 메시지 TTL
     'ESTAB_PEER_TIMEOUT': 5,  # ESTAB_PEER 메시지 수신 시간(초)
     'ESTAB_PEER_MAX_COUNT': 10,  # ESTAB 최대 연결수

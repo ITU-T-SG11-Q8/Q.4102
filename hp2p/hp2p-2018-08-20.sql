@@ -37,7 +37,10 @@ CREATE TABLE IF NOT EXISTS `hp2p_overlay` (
   `description` varchar(100) COLLATE utf8_unicode_ci DEFAULT NULL,
   `auth_type` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
   `auth_admin_key` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
+  `auth_keyword` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
   `auth_access_key` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
+  `heartbeat_interval` int(11) ,
+  `heartbeat_timeout` int(11) ,
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
