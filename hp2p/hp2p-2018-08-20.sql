@@ -11,6 +11,7 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 
+
 -- hp2p 데이터베이스 구조 내보내기
 CREATE DATABASE IF NOT EXISTS `hp2p` /*!40100 DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci */;
 USE `hp2p`;
@@ -34,15 +35,14 @@ CREATE TABLE IF NOT EXISTS `hp2p_overlay` (
   `expires` int(11) NOT NULL DEFAULT 0,
   `overlay_status` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
   `description` varchar(100) COLLATE utf8_unicode_ci DEFAULT NULL,
-  `heartbeat_interval` int(11) NOT NULL DEFAULT 0,
-  `heartbeat_timeout` int(11) NOT NULL DEFAULT 0,
-  `auth_keyword` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
   `auth_type` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
   `auth_admin_key` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
+  `auth_keyword` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
   `auth_access_key` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
-  `created_at` datetime NOT NULL,
-  `updated_at` datetime NOT NULL,
-  PRIMARY KEY (`overlay_id`)
+  `heartbeat_interval` int(11) ,
+  `heartbeat_timeout` int(11) ,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 -- 내보낼 데이터가 선택되어 있지 않습니다.
@@ -50,29 +50,19 @@ CREATE TABLE IF NOT EXISTS `hp2p_overlay` (
 CREATE TABLE IF NOT EXISTS `hp2p_peer` (
   `peer_id` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
   `overlay_id` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
-  `ticket_id` int(11) DEFAULT NULL,
   `overlay_type` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
   `sub_type` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
   `expires` int(11) DEFAULT NULL,
   `address` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
-  `auth_password` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
+  `max_capa` int(11) NOT NULL DEFAULT 0,
   `num_primary` int(11) NOT NULL DEFAULT 0,
   `num_out_candidate` int(11) NOT NULL DEFAULT 0,
   `num_in_candidate` int(11) NOT NULL DEFAULT 0,
   `costmap` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  `peer_index` int(11) DEFAULT NULL,
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
-  `report_time` datetime DEFAULT NULL,
   PRIMARY KEY (`peer_id`,`overlay_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
-
--- 내보낼 데이터가 선택되어 있지 않습니다.
--- 테이블 hp2p.public_data 구조 내보내기
-CREATE TABLE IF NOT EXISTS `public_data` (
-  `data_time` datetime NOT NULL,
-  `pm10_data` longtext COLLATE utf8_unicode_ci NOT NULL,
-  `updated_at` datetime NOT NULL,
-  PRIMARY KEY (`data_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 -- 내보낼 데이터가 선택되어 있지 않습니다.

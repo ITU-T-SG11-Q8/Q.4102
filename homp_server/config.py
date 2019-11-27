@@ -15,10 +15,10 @@ WEB_SOCKET_CONFIG = {
 }
 
 DATABASE_CONFIG = {  # DB 환경 설정
-    'DB_HOST': 'localhost',
-    'DB_PORT': 3386,
+    'DB_HOST': '127.0.0.1',
+    'DB_PORT': 3306,
     'DB_USER': 'root',
-    'DB_PASS': 'root',
+    'DB_PASS': 'wkdtjqdl',
     'DB_DATABASE': 'hp2p'
 }
 
