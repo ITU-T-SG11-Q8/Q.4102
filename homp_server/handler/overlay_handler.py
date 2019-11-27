@@ -1,10 +1,13 @@
-from flask import request
-from flask_restful import Resource
-from database.db_connector import DBConnector
-from data.factory import Factory
-from classes.overlay import Overlay
 import uuid
 from datetime import datetime
+
+from flask import request
+from flask_restful import Resource
+
+from config import HOMS_CONFIG, WEB_SOCKET_CONFIG
+from service.service import Service
+from classes.overlay import Overlay
+from database.db_connector import DBConnector
 
 
 class HybridOverlayCreation(Resource):
@@ -19,7 +22,7 @@ class HybridOverlayCreation(Resource):
             overlay_type = request_data.get('type')
             sub_type = request_data.get('sub_type')
             owner_id = request_data.get('owner_id')
-            expires = request_data.get('expires') if 'expires' in request_data else 0
+            expires = request_data.get('expires') if 'expires' in request_data else HOMS_CONFIG['OVERLAY_EXPIRES']
             description = request_data.get('description')
             heartbeat_interval = request_data.get('heartbeat_interval')
             heartbeat_timeout = request_data.get('heartbeat_timeout')
@@ -93,10 +96,10 @@ class HybridOverlayCreation(Resource):
             if expires > 0:
                 new_overlay.update_time = datetime.now()
 
-            Factory.instance().set_overlay(overlay_id, new_overlay)
-            Factory.instance().get_web_socket_handler().send_create_overlay_message(overlay_id)
+            Service.get().set_overlay(overlay_id, new_overlay)
+            Service.get().get_web_socket_handler().send_create_overlay_message(overlay_id)
+            Service.get().get_web_socket_handler().send_log_message(overlay_id, owner_id, "Overlay Creation.")
 
-            # TODO - Overlay expires 관리 / 추가
             db_connector.commit()
             return result, 200
         except ValueError:
@@ -117,6 +120,7 @@ class HybridOverlayQuery(Resource):
                     "FROM hp2p_overlay"
             where = None
             parameters = None
+            orderby = " ORDER BY created_at"
             result = []
 
             if len(request.args) > 0:
@@ -131,9 +135,9 @@ class HybridOverlayQuery(Resource):
                     parameters = ('%%%s%%' % request.args.get('description'))
 
             if parameters is None or where is None:
-                select_overlay_list = db_connector.select(query)
+                select_overlay_list = db_connector.select(query + orderby)
             else:
-                query += where
+                query = query + where + orderby
                 select_overlay_list = db_connector.select(query, (parameters,))
 
             if len(select_overlay_list) > 0:
@@ -143,13 +147,6 @@ class HybridOverlayQuery(Resource):
                     num_peers_query = "SELECT COUNT(*) AS num_peers FROM hp2p_peer WHERE overlay_id = %s"
                     select_num_peers = db_connector.select_one(num_peers_query, (overlay_id,))
                     num_peers = select_num_peers.get('num_peers') if select_num_peers is not None else 0
-
-                    # select_peers_info_query = "SELECT peer_id,address FROM " \
-                    #                           "(SELECT peer_id , overlay_id , peer_index, address, " \
-                    #                           "(max_capa - num_primary - num_out_candidate - num_in_candidate) " \
-                    #                           "as capa FROM hp2p_peer WHERE overlay_id = %s) AS t_capa " \
-                    #                           "WHERE capa > 0 ORDER BY capa DESC , peer_index ASC LIMIT 5"
-                    # peer_info_list = db_connector.select(select_peers_info_query, (overlay_id,))
 
                     overlay = {
                         'overlay_id': overlay_id,
@@ -271,15 +268,14 @@ class HybridOverlayModification(Resource):
             if description is None:
                 del result['description']
 
-            get_overlay: Overlay = Factory.instance().get_overlay(overlay_id)
+            get_overlay: Overlay = Service.get().get_overlay(overlay_id)
             if expires is not None:
                 get_overlay.expires = expires
 
             if get_overlay.expires > 0:
                 get_overlay.update_time = datetime.now()
 
-            # TODO - Overlay expires 관리 / 갱신
-
+            Service.get().get_web_socket_handler().send_log_message(overlay_id, owner_id, "Overlay Modification.")
             db_connector.commit()
             return result, 200
         except ValueError:
@@ -317,14 +313,14 @@ class HybridOverlayRemoval(Resource):
             db_connector.delete("DELETE FROM hp2p_peer WHERE overlay_id = %s", (overlay_id,))
             db_connector.delete("DELETE FROM hp2p_overlay WHERE overlay_id = %s", (overlay_id,))
 
-            Factory.instance().delete_overlay(overlay_id)
-            Factory.instance().get_web_socket_handler().send_remove_overlay_message(overlay_id)
+            Service.get().delete_overlay(overlay_id)
+            Service.get().get_web_socket_handler().send_remove_overlay_message(overlay_id)
+            Service.get().get_web_socket_handler().send_log_message(overlay_id, owner_id, "Overlay Removal.")
 
             result = {
                 'overlay_id': overlay_id
             }
             db_connector.commit()
-            # TODO - Overlay expires 관리 / 제거
             return result, 200
         except ValueError:
             db_connector.rollback()
@@ -358,13 +354,14 @@ class ApiHybridOverlayRemoval(Resource):
             db_connector.delete("DELETE FROM hp2p_peer WHERE overlay_id = %s", (overlay_id,))
             db_connector.delete("DELETE FROM hp2p_overlay WHERE overlay_id = %s", (overlay_id,))
 
-            Factory.instance().delete_overlay(overlay_id)
-            Factory.instance().get_web_socket_handler().send_remove_overlay_message(overlay_id)
+            Service.get().delete_overlay(overlay_id)
+            Service.get().get_web_socket_handler().send_remove_overlay_message(overlay_id)
+            Service.get().get_web_socket_handler().send_log_message(overlay_id, "Administrator", "Overlay Removal.")
+
             result = {
                 'overlay_id': overlay_id
             }
             db_connector.commit()
-            # TODO - Overlay expires 관리 / 제거
             return result, 200
         except ValueError:
             db_connector.rollback()
@@ -372,3 +369,27 @@ class ApiHybridOverlayRemoval(Resource):
         except Exception as exception:
             db_connector.rollback()
             return str(exception), 500
+
+
+class GetInitData(Resource):
+    def get(self):
+        result = {
+            'WEB_SOCKET_PORT': WEB_SOCKET_CONFIG['PORT']
+        }
+        return result, 200
+
+
+class GetOverlayCostMap(Resource):
+    def get(self):
+        if len(request.args) > 0 and 'overlay_id' in request.args:
+            overlay = Service.get().get_overlay(request.args.get('overlay_id'))
+            message = Service.get().get_web_socket_handler().create_overlay_cost_map_message(overlay)
+            return message, 200
+        else:
+            return None, 404
+# select_peers_info_query = "SELECT peer_id,address FROM " \
+#                           "(SELECT peer_id , overlay_id , peer_index, address, " \
+#                           "(max_capa - num_primary - num_out_candidate - num_in_candidate) " \
+#                           "as capa FROM hp2p_peer WHERE overlay_id = %s) AS t_capa " \
+#                           "WHERE capa > 0 ORDER BY capa DESC , peer_index ASC LIMIT 5"
+# peer_info_list = db_connector.select(select_peers_info_query, (overlay_id,))

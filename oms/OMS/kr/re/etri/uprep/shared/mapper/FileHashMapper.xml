@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+       PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+       "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.re.etri.uprep">
+	
+	<select id="SELECT_FILE_HASH" parameterType="hashmap" resultType="hashmap">
+		SELECT  FILE_ID,
+	   			HASH_INDEX, 
+	   			CHANNEL_ID,                                       
+		        HASH_VALUE,
+		        DATE_FORMAT(CREATED_AT, '%Y-%m-%d %H:%i:%s') CREATED_AT                                  
+		FROM     
+				uprep_file_hash
+		<where>
+			<trim prefixOverrides="AND">
+				<if test="FILE_ID != null">
+					AND FILE_ID = #{FILE_ID}
+				</if>
+				<if test="HASH_INDEX != null">
+					AND HASH_INDEX = #{HASH_INDEX}
+				</if>
+			</trim>
+		</where>
+	</select>
+	
+	<insert id="INSERT_FILE_HASH" parameterType="hashmap">
+		INSERT INTO uprep_file_hash
+			<trim prefix="(" prefixOverrides="" suffix=")" suffixOverrides=",">
+		        FILE_ID,
+	   			HASH_INDEX,
+	   			CHANNEL_ID,                                        
+		        HASH_VALUE,
+		        CREATED_AT
+			</trim>
+		VALUES
+			<trim prefix="(" prefixOverrides="" suffix=")" suffixOverrides=",">
+		        #{FILE_ID},
+	   			#{HASH_INDEX},
+	   			#{CHANNEL_ID},                                        
+		        #{HASH_VALUE},
+		        now()
+			</trim>
+		ON 
+			DUPLICATE KEY 
+		UPDATE
+			HASH_VALUE = #{HASH_VALUE} , 
+			CREATED_AT = now()
+	</insert>
+	
+	<update id ="UPDATE_FILE_HASH" parameterType="hashmap">
+		UPDATE uprep_file_hash
+		SET    
+		       <if test="HASH_VALUE != null">HASH_VALUE = #{HASH_VALUE},</if>
+		       CREATED_AT = now()
+		WHERE  
+			FILE_ID = #{FILE_ID}
+		AND 
+			HASH_INDEX = #{HASH_INDEX}
+	</update>
+	
+	<delete id="DELETE_FILE_HASH" parameterType="hashmap" >
+		DELETE FROM 
+			uprep_file_hash
+		<where>
+			<trim prefixOverrides="AND">
+				<if test="FILE_ID != null">
+					AND FILE_ID = #{FILE_ID}
+				</if>
+				<if test="HASH_INDEX != null">
+					AND HASH_INDEX = #{HASH_INDEX}
+				</if>
+				<if test="CHANNEL_ID != null">
+					AND CHANNEL_ID = #{CHANNEL_ID}
+				</if>
+			</trim>
+		</where> 
+	</delete>
+	
+	<delete id="DELETE_ALL_FILE_HASH" parameterType="hashmap" >
+		DELETE FROM 
+			uprep_file_hash
+		<where>
+			<if test="CHANNEL_ID_LIST != null">
+			CHANNEL_ID IN
+				<foreach collection="CHANNEL_ID_LIST" item="item" separator="," open="(" close=")">
+				    #{item}
+				</foreach>
+			</if>
+		</where>
+	</delete>
+	
+</mapper>

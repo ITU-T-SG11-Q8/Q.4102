@@ -4,3 +4,4 @@ pip install PyMySQL
 pip install schedule
 pip install websockets
 pip install simple-websocket-server
+pip install requests

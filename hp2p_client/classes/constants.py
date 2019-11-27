@@ -9,6 +9,8 @@ class RequestPath:
     OverlayRefresh = "/HybridOverlayRefresh"
     OverlayLeave = "/HybridOverlayLeave"
 
+    OverlayCostMap = "/api/OverlayCostMap"
+
 
 class MessageType:
     VERSION = 0x01

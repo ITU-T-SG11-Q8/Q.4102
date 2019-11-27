@@ -6,7 +6,7 @@ class SingletonInstance:
         return cls._instance
 
     @classmethod
-    def instance(cls, *args, **kargs):
+    def get(cls, *args, **kargs):
         cls._instance = cls(*args, **kargs)
-        cls.instance = cls._get_instance
+        cls.get = cls._get_instance
         return cls._instance

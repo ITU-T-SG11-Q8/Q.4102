@@ -1,18 +1,21 @@
 from classes.peer import Peer
 from classes.singleton_instance import SingletonInstance
-from homp.homp_message_handler import HompMessageHandler
+from config import PEER_CONFIG
 
 
 class Factory(SingletonInstance):
     def __init__(self):
         self._peer = Peer()
-        self._homp_handler = HompMessageHandler()
+        self._homp_handler = None
         self._tcp_server = None
         self._peer_manager = None
         self._tcp_message_handler = None
-        self._heartbeat_scheduler = None
+        self._client_scheduler = None
         self._rtc_hp2p_client = None
         self._mode = None
+        self._web_socket_message_handler = None
+        self._udp_socket_client = None
+        self._uprep_address = None
 
     def get_tcp_server(self):
         return self._tcp_server
@@ -33,17 +36,20 @@ class Factory(SingletonInstance):
     def get_homp_handler(self):
         return self._homp_handler
 
+    def set_homp_handler(self, handle):
+        self._homp_handler = handle
+
     def get_tcp_message_handler(self):
         return self._tcp_message_handler
 
     def set_tcp_message_handler(self, tcp_message_handler):
         self._tcp_message_handler = tcp_message_handler
 
-    def get_heartbeat_scheduler(self):
-        return self._heartbeat_scheduler
+    def get_client_scheduler(self):
+        return self._client_scheduler
 
-    def set_heartbeat_scheduler(self, scheduler):
-        self._heartbeat_scheduler = scheduler
+    def set_client_scheduler(self, scheduler):
+        self._client_scheduler = scheduler
 
     def get_rtc_hp2p_client(self):
         return self._rtc_hp2p_client
@@ -57,3 +63,23 @@ class Factory(SingletonInstance):
 
     def set_mode(self, mode):
         self._mode = mode
+
+    def get_web_socket_handler(self):
+        return self._web_socket_message_handler
+
+    def set_web_socket_handler(self, handler):
+        self._web_socket_message_handler = handler
+
+    def set_udp_socket_client(self, udp_socket_client, uprep_ip, uprep_port):
+        self._udp_socket_client = udp_socket_client
+        self._uprep_address = (uprep_ip, uprep_port)
+
+    def sendto_udp_socket(self, message):
+        try:
+            if self._udp_socket_client is not None and self._uprep_address is not None:
+                self._udp_socket_client.sendto(message.encode(), self._uprep_address)
+                if PEER_CONFIG['PRINT_UPREP_LOG']:
+                    print('[uPREP] Send Data.', message)
+        except:
+            if PEER_CONFIG['PRINT_UPREP_LOG']:
+                print('[uPREP] Failed Send Data')

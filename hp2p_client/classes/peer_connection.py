@@ -9,5 +9,4 @@ class PeerConnection:
         self.is_parent = is_parent
         self.connection = connection
         self.address = address
-        self.priority = None
         self.update_time = datetime.now()

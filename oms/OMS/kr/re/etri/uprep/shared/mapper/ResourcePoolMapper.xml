@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+       PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+       "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.re.etri.uprep">
+	
+	<select id="SELECT_RESOURCE_POOL_ALLOCATION" parameterType="hashmap" resultType="hashmap">
+		SELECT  RESOURCE_ID,
+				OMS_URL,
+	   			TYPE,                                        
+		        IP_ADDRESS,
+		        PORT,
+		        CS_URL,
+		        EXPIRES
+		FROM     
+				uprep_resource_pool
+		<where>
+			<trim prefixOverrides="AND">
+				<if test="TYPE != null">
+					AND TYPE = #{TYPE}
+				</if>
+				<if test="STORAGE_SIZE != null">
+					AND STORAGE_SIZE <![CDATA[>=]]> #{STORAGE_SIZE}
+				</if>
+				<if test="MAX_UP_BW != null">
+					AND MAX_UP_BW <![CDATA[>=]]> #{MAX_UP_BW}
+				</if>
+				<if test="MAX_DN_BW != null">
+					AND MAX_DN_BW <![CDATA[>=]]> #{MAX_DN_BW}
+				</if>
+				<if test="MAX_NUM_CONNECTION != null">
+					AND MAX_NUM_CONNECTION <![CDATA[>=]]> #{MAX_NUM_CONNECTION}
+				</if>
+					AND MAX_NUM_OVERLAY_NETWORK <![CDATA[>]]> 0
+			</trim>
+		</where>
+	</select>
+	
+	<select id="SELECT_RESOURCE_POOL" parameterType="hashmap" resultType="hashmap">
+		SELECT  RESOURCE_ID,
+				OMS_URL,
+	   			TYPE,                                        
+		        IP_ADDRESS,
+		        PORT,
+		        CS_URL,
+		        EXPIRES,
+		        STORAGE_SIZE,
+		        MAX_UP_BW,
+	            MAX_DN_BW,
+		        MAX_NUM_CONNECTION,
+		        MAX_NUM_OVERLAY_NETWORK,
+		        DATE_FORMAT(CREATED_AT, '%Y-%m-%d %H:%i:%s') CREATED_AT,
+		        DATE_FORMAT(UPDATED_AT, '%Y-%m-%d %H:%i:%s') UPDATED_AT                                  
+		FROM     
+				uprep_resource_pool
+		<where>
+			<trim prefixOverrides="AND">
+				<if test="RESOURCE_ID != null">
+					AND RESOURCE_ID = #{RESOURCE_ID}
+				</if>
+				<if test="TYPE != null">
+					AND TYPE = #{TYPE}
+				</if>
+				<if test="IP_ADDRESS != null">
+					AND IP_ADDRESS = #{IP_ADDRESS}
+				</if>
+				<if test="PORT != null">
+					AND PORT = #{PORT}
+				</if>
+				<if test="CS_URL != null">
+					AND CS_URL = #{CS_URL}
+				</if>
+				<if test="OMS_URL != null">
+					AND OMS_URL = #{OMS_URL}
+				</if>
+			</trim>
+		</where>
+	</select>
+	
+	
+	<select id="SELECT_LAST_INSERT_RESOURCE_ID" parameterType="hashmap" resultType="hashmap">
+		SELECT  RESOURCE_ID,
+				OMS_URL,
+	   			TYPE,                                        
+		        IP_ADDRESS,
+		        PORT,
+		        CS_URL,
+		        EXPIRES,
+		        STORAGE_SIZE,
+		        MAX_UP_BW,
+	            MAX_DN_BW,
+		        MAX_NUM_CONNECTION,
+		        MAX_NUM_OVERLAY_NETWORK
+		FROM     
+				uprep_resource_pool
+		ORDER BY 
+				CREATED_AT DESC 
+		LIMIT 1
+	</select>
+	
+	<insert id="INSERT_RESOURCE_POOL" parameterType="hashmap">
+		INSERT INTO uprep_resource_pool
+			<trim prefix="(" prefixOverrides="" suffix=")" suffixOverrides=",">
+		        RESOURCE_ID,
+		        OMS_URL,
+	   			TYPE,                                        
+		        <if test="IP_ADDRESS != null">IP_ADDRESS,</if>
+		        <if test="PORT != null">PORT,</if>
+		        CS_URL,
+		        EXPIRES,
+		        <if test="STORAGE_SIZE != null">STORAGE_SIZE,</if>
+		        MAX_UP_BW,
+	            MAX_DN_BW,
+		        MAX_NUM_CONNECTION,
+		        MAX_NUM_OVERLAY_NETWORK,
+		        CREATED_AT
+			</trim>
+		VALUES
+			<trim prefix="(" prefixOverrides="" suffix=")" suffixOverrides=",">
+		        #{RESOURCE_ID},
+		        #{OMS_URL},
+	   			#{TYPE},                                        
+		        <if test="IP_ADDRESS != null">#{IP_ADDRESS},</if>
+		        <if test="PORT != null">#{PORT},</if>
+		        #{CS_URL},
+		        #{EXPIRES},
+		        <if test="STORAGE_SIZE != null">#{STORAGE_SIZE},</if>
+		        #{MAX_UP_BW},
+	            #{MAX_DN_BW},
+		        #{MAX_NUM_CONNECTION},
+		        #{MAX_NUM_OVERLAY_NETWORK},
+		        now()
+			</trim>
+		ON 
+			DUPLICATE KEY 
+		UPDATE
+			TYPE = #{TYPE} , 
+			EXPIRES = #{EXPIRES} ,
+			<if test="STORAGE_SIZE != null"> STORAGE_SIZE = #{STORAGE_SIZE} ,</if> 
+			MAX_UP_BW = #{MAX_UP_BW} ,
+			MAX_DN_BW = #{MAX_DN_BW} ,
+			MAX_NUM_CONNECTION = #{MAX_NUM_CONNECTION} ,
+			MAX_NUM_OVERLAY_NETWORK = #{MAX_NUM_OVERLAY_NETWORK} ,
+			UPDATED_AT = now()
+	</insert>
+	
+	<update id ="UPDATE_RESOURCE_POOL" parameterType="hashmap">
+		UPDATE uprep_resource_pool
+		SET    
+	        TYPE = #{TYPE} , 
+			EXPIRES = #{EXPIRES} ,
+			<if test="STORAGE_SIZE != null"> STORAGE_SIZE = #{STORAGE_SIZE} ,</if> 
+			MAX_UP_BW = #{MAX_UP_BW} ,
+			MAX_DN_BW = #{MAX_DN_BW} ,
+			MAX_NUM_CONNECTION = #{MAX_NUM_CONNECTION} ,
+			MAX_NUM_OVERLAY_NETWORK = #{MAX_NUM_OVERLAY_NETWORK} ,
+			UPDATED_AT = now()
+		WHERE  
+			RESOURCE_ID = #{RESOURCE_ID}
+	</update>
+	
+	<delete id="DELETE_RESOURCE_POOL" parameterType="hashmap" >
+		DELETE FROM 
+			uprep_resource_pool
+		<where>
+			<trim prefixOverrides="AND">
+				<if test="RESOURCE_ID != null">
+					AND RESOURCE_ID = #{RESOURCE_ID}
+				</if>
+				<if test="OMS_URL != null">
+					AND OMS_URL = #{OMS_URL}
+				</if>
+			</trim>
+		</where> 
+	</delete>
+	
+	<delete id="DELETE_ALL_RESOURCE_POOL" parameterType="hashmap" >
+		DELETE FROM 
+			uprep_resource_pool
+		<where>
+			<trim prefixOverrides="AND">
+				<if test="OMS_URL != null">
+					AND OMS_URL LIKE CONCAT('%',#{OMS_URL},'%')
+				</if>
+				<if test="IP_ADDRESS != null">
+					AND IP_ADDRESS = #{IP_ADDRESS}
+				</if>
+				<if test="CS_URL != null">
+					AND CS_URL LIKE CONCAT('%',#{CS_URL},'%')
+				</if>
+			</trim>
+		</where>
+	</delete>
+	
+</mapper>

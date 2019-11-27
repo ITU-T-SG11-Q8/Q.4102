@@ -1,22 +1,25 @@
 import threading
 
-from data.factory import Factory, Peer, HompMessageHandler
+from data.factory import Factory, Peer
 from config import CLIENT_CONFIG
+from homp.homp_message_handler import HompMessageHandler
 from tcp.tcp_peer_connection_manager import TcpPeerConnectionManager
 from tcp.tcp_message_server import TcpMessageHandler, TcpThreadingSocketServer
+from data.client_scheduler import ClientScheduler
 
 
 class TcpHp2pClient:
-
     def __init__(self):
         self.peer: Peer = Factory.instance().get_peer()
         self.handler: HompMessageHandler = Factory.instance().get_homp_handler()
         self.peer_manager: TcpPeerConnectionManager = Factory.instance().get_peer_manager()
+        self._s_flag = False
 
     def run_auto_client(self):
         print('run_auto_client')
         self.auto_creation_and_join()
-        self.process_client()
+        self.simple_process_client()
+        # self.process_client()
 
     def run_client(self):
         self.creation_and_join()
@@ -28,7 +31,8 @@ class TcpHp2pClient:
             self.handler.join(self.peer)
             self.handler.report(self.peer, Factory.instance().get_peer_manager())
             self.handler.modification(self.peer)
-            # TODO => homp_handler.modification(peer) start timer expires
+
+            self.run_expires_scheduler(self.peer.peer_expires)
             TcpMessageHandler.run_heartbeat_scheduler()
         else:
             if self.peer.overlay_id is None:
@@ -43,25 +47,45 @@ class TcpHp2pClient:
             join_response = self.handler.join(self.peer)
 
             if join_response is None:
+                # TODO 복구
                 print('filed join...')
+                print('\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                print('++++++++[HOPP] Overlay 네트웨크에 참가 실패.')
+                print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
             else:
+                self.run_expires_scheduler(self.peer.peer_expires)
                 TcpMessageHandler.run_heartbeat_scheduler()
+
                 if len(join_response) > 0:
+                    is_process = False
                     for peer_info in join_response:
                         target_peer_id = peer_info.get('peer_id')
                         target_address = peer_info.get('address')
-                        print("Join...", target_peer_id, target_address, flush=True)
-                        try:
+
+                        if self.peer.peer_id == target_peer_id:
+                            self.peer.is_top_peer = True
+                            print("Top Peer...", flush=True)
+                            is_process = True
+                            break
+                        else:
+                            print("Join...", target_peer_id, target_address, flush=True)
                             hello_result = TcpMessageHandler.send_hello_peer(self.peer, target_address)
                             if hello_result:
                                 TcpMessageHandler.run_estab_peer_timer()
+                                is_process = True
                                 break
-                        except Exception as e:
-                            print(e)
-                            pass
+
+                    if not is_process:
+                        # TODO 복구
+                        print('\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                        print('++++++++[HOPP] HELLO_PEER List is None... 네트웨크에 참가 실패.')
+                        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                 else:
+                    # TODO 복구
                     self.handler.report(self.peer, self.peer_manager)
-                    print('Peer List is None')
+                    print('\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                    print('HELLO_PEER  List is None... 네트웨크에 참가 실패. 서버 문제 발생...')
+                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
     def creation_and_join(self):
         method = input("모드 선택(채널 생성:1, 채널 참가:2, 종료:0) =>")
@@ -87,8 +111,8 @@ class TcpHp2pClient:
             self.handler.join(self.peer)
             self.handler.report(self.peer, Factory.instance().get_peer_manager())
             self.handler.modification(self.peer)
-            # TODO => homp_handler.modification(peer) start timer expires
 
+            self.run_expires_scheduler(self.peer.peer_expires)
             TcpMessageHandler.run_heartbeat_scheduler()
         elif method.lower() == '2':
             overlay_list = self.handler.query()
@@ -116,7 +140,12 @@ class TcpHp2pClient:
                         join_response = self.handler.join(self.peer)
 
                         if join_response is None:
+                            # TODO 복구
                             print('filed join...')
+                            print('\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                            print('++++++++[HOPP] Overlay 네트웨크에 참가 실패.')
+                            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+
                             input_yes_no = input("Peer ID 를 변경하시겠습니까? (Y/N)")
                             if input_yes_no.lower() == 'y':
                                 input_new_peer_id = input("새로운 Peer ID =>")
@@ -124,22 +153,39 @@ class TcpHp2pClient:
 
                             self.creation_and_join()
                         else:
+                            self.run_expires_scheduler(self.peer.peer_expires)
                             TcpMessageHandler.run_heartbeat_scheduler()
+
                             if len(join_response) > 0:
+                                is_process = False
                                 for peer_info in join_response:
                                     target_peer_id = peer_info.get('peer_id')
                                     target_address = peer_info.get('address')
-                                    print("Join...", target_peer_id, target_address, flush=True)
-                                    try:
+
+                                    if self.peer.peer_id == target_peer_id:
+                                        self.peer.is_top_peer = True
+                                        print("Top Peer...", flush=True)
+                                        is_process = True
+                                        break
+                                    else:
+                                        print("Join...", target_peer_id, target_address, flush=True)
                                         hello_result = TcpMessageHandler.send_hello_peer(self.peer, target_address)
                                         if hello_result:
                                             TcpMessageHandler.run_estab_peer_timer()
-                                    except Exception as e:
-                                        print(e)
-                                        pass
+                                            is_process = True
+                                            break
+
+                                if not is_process:
+                                    # TODO 복구
+                                    print('\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                                    print('++++++++[HOPP] HELLO_PEER List is None... 네트웨크에 참가 실패.')
+                                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                             else:
+                                # TODO 복구
                                 self.handler.report(self.peer, self.peer_manager)
-                                print('Peer List is None')
+                                print('\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                                print('HELLO_PEER List is None... 네트웨크에 참가 실패. 서버 문제 발생...')
+                                print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                 except:
                     print('잘못된 입력입니다.')
                     self.creation_and_join()
@@ -175,11 +221,12 @@ class TcpHp2pClient:
                 elif input_method.lower() == '1':  # 연결상태 확인
                     print(
                         '\n*******************************************************************************************')
-                    print('Peer ID', self.peer.peer_id)
-                    # print('PEERS', self.peer_manager.peers.keys())
-                    print('PRIMARY_LIST', self.peer_manager.primary_list)
-                    print('IN_CANDIDATE_LIST', self.peer_manager.in_candidate_list)
-                    print('OUT_CANDIDATE_LIST', self.peer_manager.out_candidate_list)
+                    print('Peer ID => {0}   &&&   Ticket ID => {1}'.format(self.peer.peer_id, self.peer.ticket_id))
+                    if self.peer.using_web_gui:
+                        print('GUI URL=> localhost:{0}'.format(self.peer.gui_server_port))
+                    print('PRIMARY_LIST', self.peer_manager.get_primary_list())
+                    print('IN_CANDIDATE_LIST', self.peer_manager.get_in_coming_candidate_list())
+                    print('OUT_CANDIDATE_LIST', self.peer_manager.get_out_going_candidate_list())
                     print(
                         '*******************************************************************************************\n')
 
@@ -189,7 +236,6 @@ class TcpHp2pClient:
 
                 elif input_method.lower() == '3' and self.peer.overlay_id is not None:  # 채널 탈퇴
                     self.handler.leave(self.peer)
-                    self.handler.removal(self.peer)
                     TcpMessageHandler.send_to_all_release_peer()
                 # 채널 갱신
                 elif input_method.lower() == '4' and not is_default_input_mode and self.peer.overlay_id is not None:
@@ -233,26 +279,37 @@ class TcpHp2pClient:
         except Exception as e:
             print(e)
         finally:
-            TcpMessageHandler.send_to_all_release_peer()
-            self.handler.leave(self.peer)
-            self.handler.removal(self.peer)
-            # TODO => homp_handler.modification(peer) stop timer expires
+            self.client_end()
 
-            server = Factory.instance().get_tcp_server()
-            if server is not None:
-                print('TCP Server Shutdown')
-                server.shutdown()
-                server.server_close()
+    def simple_process_client(self):
+        try:
+            while True:
+                input_method = input("")
 
-            scheduler = Factory.instance().get_heartbeat_scheduler()
-            if scheduler is not None:
-                scheduler.stop()
-                Factory.instance().set_heartbeat_scheduler(None)
-
-            print("__END__")
+                if input_method.lower() == '/end' or input_method.lower() == '0':  # 종료
+                    break
+                elif input_method.lower() == '/show' or input_method.lower() == '/s':  # 연결상태 확인
+                    print(
+                        '\n*******************************************************************************************')
+                    print('Peer ID => {0}   &&&   Ticket ID => {1}'.format(self.peer.peer_id, self.peer.ticket_id))
+                    if self.peer.using_web_gui:
+                        print('GUI URL=> localhost:{0}'.format(self.peer.gui_server_port))
+                    print('PRIMARY_LIST', self.peer_manager.get_primary_list())
+                    print('IN_CANDIDATE_LIST', self.peer_manager.get_in_coming_candidate_list())
+                    print('OUT_CANDIDATE_LIST', self.peer_manager.get_out_going_candidate_list())
+                    print(
+                        '*******************************************************************************************\n')
+                elif input_method.lower() == '/data' or input_method.lower() == '/d':  # 데이터 전송
+                    send_data = input("Message =>")
+                    TcpMessageHandler.send_broadcast_data(self.peer, send_data)
+                else:
+                    print("")
+        except Exception as e:
+            print(e)
+        finally:
+            self.client_end()
 
     def run_tcp_server(self):
-        server = None
         try:
             print('TCP Server Start.\n')
             address = (CLIENT_CONFIG['TCP_SERVER_IP'], 0)
@@ -262,21 +319,46 @@ class TcpHp2pClient:
             server.serve_forever()
         except KeyboardInterrupt:
             print('Error KeyboardInterrupt')
-            print('\t\tTCP Server Shutdown')
-            server.shutdown()
-            server.server_close()
-            scheduler = Factory.instance().get_heartbeat_scheduler()
-            if scheduler is not None:
-                scheduler.stop()
-                Factory.instance().set_heartbeat_scheduler(None)
+            self.client_end()
 
-    def start(self, mode):
-        t = threading.Thread(target=self.run_tcp_server, args=())
-        t.daemon = True
+    def run_expires_scheduler(self, interval):
+        self._s_flag = False
+        scheduler: ClientScheduler = Factory.instance().get_client_scheduler()
+        scheduler.append_expires_scheduler(int(interval / 2), self.send_overlay_refresh)
+
+    def send_overlay_refresh(self):
+        if not self._s_flag:
+            self._s_flag = True
+            self.handler.refresh(self.peer)
+            self._s_flag = False
+
+    def client_start(self, mode):
+        t = threading.Thread(target=self.run_tcp_server, args=(), daemon=True)
         t.start()
 
+        scheduler = ClientScheduler()
+        scheduler.start()
+        Factory.instance().set_client_scheduler(scheduler)
+
         if mode == "auto":
-            threading.Timer(2, self.run_auto_client).start()
+            threading.Timer(1, self.run_auto_client).start()
         else:
             self.peer.is_auto = False
             self.run_client()
+
+    def client_end(self):
+        self.handler.leave(self.peer)
+        TcpMessageHandler.send_to_all_release_peer()
+
+        server = Factory.instance().get_tcp_server()
+        if server is not None:
+            print('\n TCP Server Shutdown')
+            server.shutdown()
+            server.server_close()
+
+        scheduler: ClientScheduler = Factory.instance().get_client_scheduler()
+        if scheduler is not None:
+            print('\n Scheduler Stop...')
+            scheduler.stop()
+
+        print("__END__")

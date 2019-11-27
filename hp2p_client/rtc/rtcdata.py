@@ -156,7 +156,8 @@ class RTCData(EventEmitter):
                     rtc_hp2p_client.received_response_hello_peer(True)
 
     def send_to_server(self, message):
-        self.__wait_async(self.__signaling.send(message))
+        # self.__wait_async(self.__signaling.send(message))
+        self.__signaling.send(message)
 
     async def __connect_to_peer(self, toid, ticket_id):
         # incoming
@@ -175,16 +176,20 @@ class RTCData(EventEmitter):
         self.__wait_async(self.__disconnect_to_peer(toid))
 
     def send(self, to_peer_id, msg):
-        self.__wait_async(self.__rtcPeerCollection.sendMessage(to_peer_id, msg))
+        # self.__wait_async(self.__rtcPeerCollection.sendMessage(to_peer_id, msg))
+        self.__rtcPeerCollection.sendMessage(to_peer_id, msg)
 
     def send_broadcast_message(self, msg):
-        self.__wait_async(self.__rtcPeerCollection.broadcast_message(msg))
+        # self.__wait_async(self.__rtcPeerCollection.broadcast_message(msg))
+        self.__rtcPeerCollection.broadcast_message(msg)
 
     def send_broadcast_message_other(self, sender_id, msg):
-        self.__wait_async(self.__rtcPeerCollection.broadcast_message_other(sender_id, msg))
+        # self.__wait_async(self.__rtcPeerCollection.broadcast_message_other(sender_id, msg))
+        self.__rtcPeerCollection.broadcast_message_other(sender_id, msg)
 
     def send_broadcast_message_to_children(self, msg):
-        self.__wait_async(self.__rtcPeerCollection.broadcast_message_to_children(msg))
+        # self.__wait_async(self.__rtcPeerCollection.broadcast_message_to_children(msg))
+        self.__rtcPeerCollection.broadcast_message_to_children(msg)
 
     def close(self):
         self.__close = True

@@ -4,10 +4,12 @@ import json
 import operator
 from datetime import datetime
 
-from data.factory import Factory, Peer, HompMessageHandler
+from data.factory import Factory, Peer
 from config import CLIENT_CONFIG, PEER_CONFIG
 from rtc.rtcdata import RTCData
 from classes.constants import MessageType
+from homp.homp_message_handler import HompMessageHandler
+from data.client_scheduler import ClientScheduler
 
 
 class RtcHp2pClient:
@@ -18,6 +20,7 @@ class RtcHp2pClient:
         self._rtc_data = None
         self.join_peer_list = []
         self.fmt = "%Y-%m-%d %H:%M:%S.%f"
+        self._s_flag = False
         Factory.instance().set_rtc_hp2p_client(self)
 
     # WebRtc Message ...
@@ -50,7 +53,8 @@ class RtcHp2pClient:
                 print('[OutGoing] Connection Closed => ', sender.connectedId)
         else:
             if sender.isDataChannelOpened:
-                threading.Timer(self.message_delay + 1, self.send_estab_peer, [sender.connectedId]).start()
+                # threading.Timer(self.message_delay + 1, self.send_estab_peer, [sender.connectedId]).start()
+                self.send_estab_peer(sender.connectedId)
                 print('[InComing] Connection Open => ', sender.connectedId)
             else:
                 print('[InComing] Connection Closed => ', sender.connectedId)
@@ -64,7 +68,8 @@ class RtcHp2pClient:
             if MessageType.REQUEST_HELLO_PEER == req_code:
                 self.received_hello_peer(request_message)
             elif MessageType.REQUEST_ESTAB_PEER == req_code:
-                threading.Timer(self.message_delay, self.received_estab_peer, [sender, request_message]).start()
+                # threading.Timer(self.message_delay, self.received_estab_peer, [sender, request_message]).start()
+                self.received_estab_peer(sender, request_message)
             elif MessageType.REQUEST_PROBE_PEER == req_code:
                 self.received_probe_peer(sender, request_message)
             elif MessageType.REQUEST_SET_PRIMARY == req_code:
@@ -116,8 +121,7 @@ class RtcHp2pClient:
                 'RspCode': MessageType.RESPONSE_HELLO_PEER
             }
         }
-        threading.Timer(self.message_delay, self.send_to_server, [response_hello_peer_message]).start()
-
+        self.send_to_server(response_hello_peer_message)
         operation = received_message.get('ReqParams').get('operation')
         conn_num = operation.get('conn_num')
         ttl = operation.get('ttl')
@@ -128,7 +132,6 @@ class RtcHp2pClient:
 
         children_count = self.get_peer_manager().get_children_count()
         is_assignment = self.get_peer_manager().assignment_peer(target_peer_id)
-
         if not recovery:
             if children_count > 0:
                 operation['ttl'] = ttl - 1
@@ -141,7 +144,8 @@ class RtcHp2pClient:
                     self.get_rtc_data().send_broadcast_message_to_children(received_message)
 
             if is_assignment:
-                threading.Timer(self.message_delay, self.connection_to_peer, [target_peer_id, target_ticket_id]).start()
+                # threading.Timer(self.message_delay, self.connection_to_peer, [target_peer_id, target_ticket_id]).start()
+                self.connection_to_peer(target_peer_id, target_ticket_id)
         else:
             if target_ticket_id <= self.peer.ticket_id:
                 print('\n++++++++[HOPP] RECOVERY ==  target_ticket_id.... bigger than me', received_message)
@@ -167,7 +171,8 @@ class RtcHp2pClient:
                     self.get_rtc_data().send_broadcast_message_to_children(received_message)
 
             if is_assignment_recovery:
-                threading.Timer(self.message_delay, self.connection_to_peer, [target_peer_id, target_ticket_id]).start()
+                # threading.Timer(self.message_delay, self.connection_to_peer, [target_peer_id, target_ticket_id]).start()
+                self.connection_to_peer(target_peer_id, target_ticket_id)
 
         self.send_report()
 
@@ -211,8 +216,9 @@ class RtcHp2pClient:
             print('\n++++++++[HOPP] RECEIVED RESPONSE_ESTAB_PEER ')
         else:
             print('\n++++++++[HOPP] ERROR RECEIVED RESPONSE_ESTAB_PEER ', sender.connectedId)
-            self.peer_manager.un_assignment_peer(sender.connectedId)
-            threading.Timer(self.message_delay, self.get_rtc_data().disconnect_to_peer, [sender]).start()
+            self.get_peer_manager().un_assignment_peer(sender.connectedId)
+            # threading.Timer(self.message_delay, self.get_rtc_data().disconnect_to_peer, [sender]).start()
+            self.get_rtc_data().disconnect_to_peer(sender)
 
     def received_probe_peer(self, sender, request_message):
         print('\n++++++++[HOPP] RECEIVED PROBE_PEER')
@@ -225,8 +231,9 @@ class RtcHp2pClient:
             }
         }
         print('\n++++++++[HOPP] SEND PROBE_PEE RESPONSE', probe_response_message)
-        threading.Timer(self.message_delay, self.get_rtc_data().send,
-                        [sender.connectedId, probe_response_message]).start()
+        # threading.Timer(self.message_delay, self.get_rtc_data().send,
+        #                 [sender.connectedId, probe_response_message]).start()
+        self.get_rtc_data().send(sender.connectedId, probe_response_message)
 
     def received_response_probe_peer(self, sender, response_message):
         print('\n++++++++[HOPP] RECEIVED RESPONSE_PROBE_PEER ')
@@ -248,8 +255,9 @@ class RtcHp2pClient:
             primary_response_message['RspCode'] = MessageType.RESPONSE_SET_PRIMARY
 
         print('\n++++++++[HOPP] SEND SET_PRIMARY RESPONSE', primary_response_message)
-        threading.Timer(self.message_delay, self.get_rtc_data().send,
-                        [sender.connectedId, primary_response_message]).start()
+        # threading.Timer(self.message_delay, self.get_rtc_data().send,
+        #                 [sender.connectedId, primary_response_message]).start()
+        self.get_rtc_data().send(sender.connectedId, primary_response_message)
 
         if result_set_primary:
             self.send_report()
@@ -278,8 +286,9 @@ class RtcHp2pClient:
             'RspCode': MessageType.RESPONSE_SET_CANDIDATE
         }
         print('\n++++++++[HOPP] SEND SET_CANDIDATE RESPONSE', candidate_response_message)
-        threading.Timer(self.message_delay, self.get_rtc_data().send,
-                        [sender.connectedId, candidate_response_message]).start()
+        # threading.Timer(self.message_delay, self.get_rtc_data().send,
+        #                 [sender.connectedId, candidate_response_message]).start()
+        self.get_rtc_data().send(sender.connectedId, candidate_response_message)
         self.send_report()
 
     def received_response_set_candidate(self, sender):
@@ -300,8 +309,9 @@ class RtcHp2pClient:
                 'RspCode': MessageType.RESPONSE_BROADCAST_DATA
             }
             print('\n++++++++[HOPP] SEND BROADCAST_DATA RESPONSE', broadcast_data_response_message)
-            threading.Timer(self.message_delay, self.get_rtc_data().send,
-                            [sender.connectedId, broadcast_data_response_message]).start()
+            # threading.Timer(self.message_delay, self.get_rtc_data().send,
+            #                 [sender.connectedId, broadcast_data_response_message]).start()
+            self.get_rtc_data().send(sender.connectedId, broadcast_data_response_message)
 
         if source_peer != self.peer.peer_id:
             self.relay_broadcast_data(sender, request_message)
@@ -321,8 +331,9 @@ class RtcHp2pClient:
                 'RspCode': MessageType.RESPONSE_RELEASE_PEER
             }
             print('\n++++++++[HOPP] SEND RELEASE_PEER RESPONSE', release_response_message)
-            threading.Timer(self.message_delay, self.get_rtc_data().send,
-                            [sender.connectedId, release_response_message]).start()
+            # threading.Timer(self.message_delay, self.get_rtc_data().send,
+            #                 [sender.connectedId, release_response_message]).start()
+            self.get_rtc_data().send(sender.connectedId, release_response_message)
         else:
             self.get_rtc_data().disconnect_to_peer(sender.connectedId)
 
@@ -378,8 +389,9 @@ class RtcHp2pClient:
             if PEER_CONFIG['PRINT_HEARTBEAT_LOG']:
                 print('\n++++++++[HOPP] SEND HEARTBEAT RESPONSE', release_response_message)
 
-            threading.Timer(self.message_delay, self.get_rtc_data().send,
-                            [sender.connectedId, release_response_message]).start()
+            # threading.Timer(self.message_delay, self.get_rtc_data().send,
+            #                 [sender.connectedId, release_response_message]).start()
+            self.get_rtc_data().send(sender.connectedId, release_response_message)
 
     def received_response_heartbeat(self, sender):
         if PEER_CONFIG['PRINT_HEARTBEAT_LOG']:
@@ -458,10 +470,11 @@ class RtcHp2pClient:
             estab_peers = self.get_peer_manager().get_estab_peers()
 
             if len(estab_peers) > 0:
-                delay_count = 0
+                # delay_count = 0
                 for peer_id in estab_peers.keys():
-                    delay_count = delay_count + 1
-                    threading.Timer(delay_count * 0.5, self.send_probe_peer, [peer_id]).start()
+                    # delay_count = delay_count + 1
+                    # threading.Timer(delay_count * 0.5, self.send_probe_peer, [peer_id]).start()
+                    self.send_probe_peer(peer_id)
 
                 self.run_probe_peer_timer()
             else:
@@ -516,10 +529,11 @@ class RtcHp2pClient:
         self.get_peer_manager().is_run_primary_peer = False
 
         if len(self.get_peer_manager().estab_peers) > 0:
-            delay_count = 0
+            # delay_count = 0
             for peer_id in self.get_peer_manager().estab_peers.keys():
-                delay_count = delay_count + 1
-                threading.Timer(delay_count * 0.5, self.send_set_candidate, [peer_id]).start()
+                # delay_count = delay_count + 1
+                # threading.Timer(delay_count * 0.5, self.send_set_candidate, [peer_id]).start()
+                self.send_set_candidate(peer_id)
 
         self.get_peer_manager().estab_peers.clear()
 
@@ -618,6 +632,8 @@ class RtcHp2pClient:
 
     def send_to_server(self, message):
         print('send message: ', message)
+        # TODO 웹소켓 확인
+        # threading.Timer(self.message_delay, self.send_to_server, [response_hello_peer_message]).start()
         self.get_rtc_data().send_to_server(message)
 
     def _send(self, message):
@@ -639,7 +655,7 @@ class RtcHp2pClient:
         self._send(bye_message)
 
     # Client function ...
-    def start(self):
+    def client_start(self):
         web_socket_ip = CLIENT_CONFIG['WEB_SOCKET_SERVER_IP']
         web_socket_port = CLIENT_CONFIG['WEB_SOCKET_SERVER_PORT']
         self.peer.set_web_socket_server_info(web_socket_ip, web_socket_port)
@@ -648,22 +664,28 @@ class RtcHp2pClient:
         self.get_rtc_data().connect_signal_server(web_socket_ip, web_socket_port)
         self.web_socket_send_hello()
 
-        threading.Timer(3, self.run_client).start()
+        scheduler = ClientScheduler()
+        scheduler.start()
+        Factory.instance().set_client_scheduler(scheduler)
 
-    def run_client(self):
-        print('run_client')
-        self.creation_and_join()
+        threading.Timer(1, self.run_auto_client).start()
+
+    def run_auto_client(self):
+        print('run_auto_client')
+        self.auto_creation_and_join()
         self.process_client()
 
-    def creation_and_join(self):
+    def auto_creation_and_join(self):
         if self.peer.isOwner:
             self.handler.creation(self.peer)
             self.handler.join(self.peer)
             self.get_rtc_data().set_ticket_id(self.peer.ticket_id)
             self.send_report()
             self.handler.modification(self.peer)
-            # TODO => homp_handler.modification(peer) start timer expires
-            # TODO => rtc run_heartbeat_scheduler -> TcpMessageHandler.run_heartbeat_scheduler()
+
+            # TODO 요기
+            # self.run_expires_scheduler(self.peer.peer_expires)
+            # TcpMessageHandler.run_heartbeat_scheduler()
         else:
             if self.peer.overlay_id is None:
                 overlay_list = self.handler.query()
@@ -705,8 +727,7 @@ class RtcHp2pClient:
                 elif input_method.lower() == '1':  # 연결상태 확인
                     print(
                         '\n*******************************************************************************************')
-                    print('Peer ID', self.peer.peer_id)
-                    # print('PEERS', self.get_peer_manager().peers.keys())
+                    print('Peer ID => {0}   &&&   Ticket ID => {1}'.format(self.peer.peer_id, self.peer.ticket_id))
                     print('PRIMARY_LIST', self.get_peer_manager().primary_list)
                     print('IN_CANDIDATE_LIST', self.get_peer_manager().in_candidate_list)
                     print('OUT_CANDIDATE_LIST', self.get_peer_manager().out_candidate_list)
@@ -720,7 +741,6 @@ class RtcHp2pClient:
 
                 elif input_method.lower() == '3' and self.peer.overlay_id is not None:  # 채널 탈퇴
                     self.handler.leave(self.peer)
-                    self.handler.removal(self.peer)
                     ## TcpMessageHandler.send_to_all_release_peer()
 
                 elif input_method.lower() == '':
@@ -733,7 +753,6 @@ class RtcHp2pClient:
         finally:
             ## TcpMessageHandler.send_to_all_release_peer()
             self.handler.leave(self.peer)
-            self.handler.removal(self.peer)
             # TODO => homp_handler.modification(peer) stop timer expires
 
             scheduler = Factory.instance().get_heartbeat_scheduler()
@@ -742,3 +761,8 @@ class RtcHp2pClient:
                 Factory.instance().set_heartbeat_scheduler(None)
 
             print("__END__")
+
+    def run_expires_scheduler(self, interval):
+        self._s_flag = False
+        scheduler: ClientScheduler = Factory.instance().get_client_scheduler()
+        scheduler.append_expires_scheduler(int(interval / 2), self.send_overlay_refresh)

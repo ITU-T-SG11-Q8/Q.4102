@@ -1,14 +1,15 @@
-from flask import request
-from flask_restful import Resource
-from database.db_connector import DBConnector
-from data.factory import Factory
-from classes.overlay import Overlay
-from classes.peer import Peer
-from config import HOMS_CONFIG
 import json
 import math
 from datetime import datetime
-import threading
+
+from flask import request
+from flask_restful import Resource
+
+from config import HOMS_CONFIG
+from service.service import Service
+from database.db_connector import DBConnector
+from classes.overlay import Overlay
+from classes.peer import Peer
 
 
 class HybridOverlayJoin(Resource):
@@ -22,7 +23,8 @@ class HybridOverlayJoin(Resource):
             overlay_type = request_data.get('type')
             sub_type = request_data.get('sub_type')
 
-            expires = request_data.get('expires') if 'expires' in request_data else 3600
+            # expires = request_data.get('expires') if 'expires' in request_data else HOMS_CONFIG['PEER_EXPIRES']
+            expires = HOMS_CONFIG['PEER_EXPIRES']
             auth_access_key = request_data.get('auth').get('access_key') if request_data.get('auth') is not None \
                 else None
 
@@ -61,20 +63,14 @@ class HybridOverlayJoin(Resource):
                 if not is_auth_peer:
                     return {'overlay_id': overlay_id}, 407
 
-            get_overlay: Overlay = Factory.instance().get_overlay(overlay_id)
+            get_overlay: Overlay = Service.get().get_overlay(overlay_id)
 
             if get_overlay is None:
                 raise ValueError
 
             status_code = 202 if sub_type == 'tree' else 200
-
-            peer_info_list_count = HOMS_CONFIG["PEER_INFO_LIST_COUNT"] \
-                if HOMS_CONFIG["PEER_INFO_LIST_COUNT"] is not None else 3
-            recovery_entrypoint_pos = HOMS_CONFIG["RECOVERY_ENTRYPOINT_POS"] \
-                if HOMS_CONFIG["RECOVERY_ENTRYPOINT_POS"] is not None else 20
-            initial_entrypoint_pos = HOMS_CONFIG["INITIAL_ENTRYPOINT_POS"] \
-                if HOMS_CONFIG["INITIAL_ENTRYPOINT_POS"] is not None else 80
-            peer_info_list = None
+            peer_info_list = []
+            peer_info_list_count = HOMS_CONFIG["PEER_INFO_LIST_COUNT"] if "PEER_INFO_LIST_COUNT" in HOMS_CONFIG else 3
 
             if recovery:
                 select_peer_query = "SELECT * FROM hp2p_peer " \
@@ -88,24 +84,45 @@ class HybridOverlayJoin(Resource):
                 if ticket_id is None or get_peer is None:
                     raise ValueError
 
-                rank_pos = math.floor(get_overlay.get_peer_dict_len() * (recovery_entrypoint_pos / 100))
+                pos = HOMS_CONFIG["RECOVERY_ENTRYPOINT_POS"] if "RECOVERY_ENTRYPOINT_POS" in HOMS_CONFIG else 20
+
+                rank_pos = math.floor(get_overlay.get_primary_peer_len() * (pos / 100))
                 rank_pos = max(rank_pos, 1)
                 select_peers_recovery_query = "SELECT v_p_t.peer_id, v_p_t.address FROM " \
-                                              " (SELECT p_t.*,@rownum := @rownum + 1 AS rank FROM hp2p_peer p_t," \
+                                              " (SELECT p_t.*,@rownum := @rownum + 1 AS rank FROM " \
+                                              " (SELECT * FROM hp2p_peer WHERE " \
+                                              " overlay_id = %s AND num_primary > 0) p_t," \
                                               " (SELECT @rownum := 0) r " \
-                                              " WHERE p_t.overlay_id = %s ORDER BY p_t.ticket_id) v_p_t " \
+                                              " ORDER BY p_t.ticket_id) v_p_t " \
                                               "WHERE v_p_t.rank <= %s AND v_p_t.ticket_id < %s " \
                                               "ORDER BY v_p_t.rank DESC LIMIT %s"
                 peer_info_list = db_connector.select(select_peers_recovery_query,
                                                      (overlay_id, rank_pos, ticket_id, peer_info_list_count))
             else:
-                # rank_pos = 0 # 테스트 용..
-                rank_pos = math.floor(get_overlay.get_peer_dict_len() * (initial_entrypoint_pos / 100))
+                pos = 80
+                size = get_overlay.get_primary_peer_len()
+                pos_dict = HOMS_CONFIG["INITIAL_ENTRYPOINT_POS"]
+                find_value = 0
+                for pos_value in sorted(pos_dict.keys()):
+                    if find_value == 0:
+                        find_value = pos_value
+
+                    if size >= pos_value:
+                        find_value = pos_value
+                    else:
+                        break
+                pos = pos_dict[find_value]
+
+                # pos = HOMS_CONFIG["INITIAL_ENTRYPOINT_POS"] if "INITIAL_ENTRYPOINT_POS" in HOMS_CONFIG else 80
+                rank_pos = math.floor(size * (pos / 100))
                 select_peers_query = "SELECT v_p_t.peer_id, v_p_t.address FROM " \
-                                     " (SELECT p_t.*,@rownum := @rownum + 1 AS rank FROM hp2p_peer p_t," \
+                                     " (SELECT p_t.*,@rownum := @rownum + 1 AS rank FROM " \
+                                     " (SELECT * FROM hp2p_peer WHERE " \
+                                     " overlay_id = %s AND num_primary > 0) p_t," \
                                      " (SELECT @rownum := 0) r " \
-                                     " WHERE p_t.overlay_id = %s ORDER BY p_t.ticket_id) v_p_t " \
+                                     " ORDER BY p_t.ticket_id) v_p_t " \
                                      "WHERE v_p_t.rank >= %s LIMIT %s"
+
                 peer_info_list = db_connector.select(select_peers_query,
                                                      (overlay_id, rank_pos, peer_info_list_count))
 
@@ -128,6 +145,11 @@ class HybridOverlayJoin(Resource):
                 new_peer.update_time = datetime.now()
                 get_overlay.add_peer(peer_id, new_peer)
 
+            if len(peer_info_list) < 1:
+                select_peers_query = "SELECT t.peer_id, t.address FROM " \
+                                     "(SELECT * FROM hp2p_peer WHERE overlay_id = %s ORDER BY ticket_id LIMIT 1) t "
+                peer_info_list = db_connector.select(select_peers_query, (overlay_id,))
+
             result = {
                 'overlay_id': overlay_id,
                 'type': overlay_type,
@@ -146,9 +168,13 @@ class HybridOverlayJoin(Resource):
                 del result['heartbeat_timeout']
                 del result['ticket_id']
 
+            if not recovery:
+                Service.get().get_web_socket_handler().send_add_peer_message(overlay_id, peer_id, ticket_id)
+                Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, "Overlay Join.")
+            else:
+                Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, "Overlay Recovery.")
+
             db_connector.commit()
-            Factory.instance().get_web_socket_handler().send_add_peer_message(overlay_id, peer_id, ticket_id)
-            # TODO - Peer expires 관리 / 추가
             return result, status_code
         except ValueError:
             db_connector.rollback()
@@ -157,20 +183,6 @@ class HybridOverlayJoin(Resource):
             db_connector.rollback()
             return str(exception), 500
 
-
-# if HOMS_CONFIG["APPLY_PEER_CAPA"]: # APPLY_PEER_CAPA 무시
-#     select_peers_info_query = "SELECT peer_id,address FROM " \
-#                               "(SELECT peer_id , overlay_id , ticket_id, address, " \
-#                               "(max_capa - num_primary - num_out_candidate - num_in_candidate) " \
-#                               "as capa FROM hp2p_peer WHERE overlay_id = %s) AS t_capa " \
-#                               "WHERE capa > 0 ORDER BY capa DESC , ticket_id ASC LIMIT %s"
-#
-# else:
-#     select_peers_info_query = "SELECT v_p_t.peer_id, v_p_t.address FROM " \
-#                               " (SELECT p_t.*,@rownum := @rownum + 1 AS rank FROM hp2p_peer p_t," \
-#                               " (SELECT @rownum := 0) r " \
-#                               " WHERE p_t.overlay_id = %s ORDER BY p_t.ticket_id) v_p_t " \
-#                               "WHERE v_p_t.rank >= %s limit %s"
 
 class HybridOverlayReport(Resource):
     def put(self):
@@ -210,7 +222,7 @@ class HybridOverlayReport(Resource):
             if select_peer is None:
                 raise ValueError
 
-            get_overlay: Overlay = Factory.instance().get_overlay(overlay_id)
+            get_overlay: Overlay = Service.get().get_overlay(overlay_id)
             if get_overlay is None:
                 raise ValueError
 
@@ -223,7 +235,9 @@ class HybridOverlayReport(Resource):
                 get_peer.num_in_candidate = num_in_candidate
                 get_peer.num_out_candidate = num_out_candidate
                 get_peer.costmap = costmap
-                Factory.instance().get_web_socket_handler().send_update_peer_message(overlay_id, costmap)
+                get_peer.update_time = datetime.now()
+
+                Service.get().get_web_socket_handler().send_update_peer_message(overlay_id, costmap)
 
                 update_peer_query = "UPDATE hp2p_peer SET " \
                                     "num_primary = %s, num_out_candidate = %s, " \
@@ -236,6 +250,10 @@ class HybridOverlayReport(Resource):
             result = {
                 'overlay_id': overlay_id
             }
+
+            costmap_message = "Overlay Report. " + json.dumps(costmap)
+            Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, costmap_message)
+
             db_connector.commit()
             return result, 200
         except ValueError:
@@ -274,7 +292,7 @@ class HybridOverlayRefresh(Resource):
             if select_peer is None:
                 raise ValueError
 
-            get_overlay: Overlay = Factory.instance().get_overlay(overlay_id)
+            get_overlay: Overlay = Service.get().get_overlay(overlay_id)
             if get_overlay is None:
                 raise ValueError
 
@@ -283,6 +301,7 @@ class HybridOverlayRefresh(Resource):
                 raise ValueError
 
             get_peer.update_time = datetime.now()
+
             if expires is None:
                 expires = select_peer.get('expires')
             else:
@@ -322,7 +341,7 @@ class HybridOverlayRefresh(Resource):
                 'overlay_id': overlay_id,
                 'expires': expires
             }
-            # TODO - Peer expires 관리 / 갱신
+
             db_connector.commit()
             return result, 200
         except ValueError:
@@ -371,7 +390,7 @@ class HybridOverlayLeave(Resource):
 
             db_connector.delete("DELETE FROM hp2p_peer WHERE peer_id = %s AND overlay_id = %s", (peer_id, overlay_id))
 
-            get_overlay: Overlay = Factory.instance().get_overlay(overlay_id)
+            get_overlay: Overlay = Service.get().get_overlay(overlay_id)
             if get_overlay is None:
                 raise ValueError
 
@@ -383,8 +402,20 @@ class HybridOverlayLeave(Resource):
             result = {
                 'overlay_id': overlay_id,
             }
-            Factory.instance().get_web_socket_handler().send_delete_peer_message(overlay_id, peer_id)
-            # TODO - Peer expires 관리 / 삭제
+
+            Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, "Overlay Leave.")
+
+            if get_overlay.get_peer_dict_len() < 1:
+                db_connector.delete("DELETE FROM hp2p_auth_peer WHERE overlay_id = %s", (overlay_id,))
+                db_connector.delete("DELETE FROM hp2p_peer WHERE overlay_id = %s", (overlay_id,))
+                db_connector.delete("DELETE FROM hp2p_overlay WHERE overlay_id = %s", (overlay_id,))
+
+                Service.get().delete_overlay(overlay_id)
+                Service.get().get_web_socket_handler().send_remove_overlay_message(overlay_id)
+                Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, "Overlay Removal.")
+            else:
+                Service.get().get_web_socket_handler().send_delete_peer_message(overlay_id, peer_id)
+
             db_connector.commit()
             return result, 200
         except ValueError:

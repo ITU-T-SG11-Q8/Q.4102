@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+       PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+       "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.re.etri.uprep">
+	
+	<select id="SELECT_INDEX_URL" parameterType="hashmap" resultType="hashmap">
+		SELECT  
+				DISTINCT INDEX_URL
+		FROM     
+				uprep_overlay_network
+		WHERE 
+				INDEX_URL IS NOT NULL
+	</select>
+	
+	<select id="SELECT_OVERLAY_NETWORK" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT   OVERLAY_NETWORK_ID,                                        
+		         VERSION,
+		         OWNER_ID,
+		         INDEX_URL,
+		         EXPIRES,
+		         PAM_ENABLED,
+		         PAMS_URL,  
+		         PAM_INTERVAL,    
+		         CLOSED,
+		         AUTH_KEY,
+		         OMS_VP_CNT,
+		         DATE_FORMAT(CREATED_AT, '%Y-%m-%d %H:%i:%s') CREATED_AT,
+		         DATE_FORMAT(UPDATED_AT, '%Y-%m-%d %H:%i:%s') UPDATED_AT                                  
+		FROM     
+				 uprep_overlay_network
+		<where>
+			<trim prefixOverrides="AND">
+				<if test="OVERLAY_NETWORK_ID != null">
+					AND OVERLAY_NETWORK_ID = #{OVERLAY_NETWORK_ID}
+				</if>
+				<if test="OWNER_ID != null">
+					AND OWNER_ID = #{OWNER_ID}
+				</if>
+				<if test="INDEX_URL != null">
+					AND INDEX_URL LIKE CONCAT('%',#{INDEX_URL},'%')
+				</if>
+			</trim>
+		</where>
+	</select>
+	
+	
+	<insert id="INSERT_OVERLAY_NETWORK" parameterType="hashmap">
+		INSERT INTO uprep_overlay_network
+			<trim prefix="(" prefixOverrides="" suffix=")" suffixOverrides=",">
+	   			OVERLAY_NETWORK_ID,                                        
+		        VERSION,
+		        OWNER_ID,
+		        EXPIRES,
+		        PAM_ENABLED,
+		        <if test="INDEX_URL != null">INDEX_URL,</if>  
+		        <if test="PAMS_URL != null">PAMS_URL,</if>  
+		        <if test="PAMS_INTERVAL != null">PAM_INTERVAL,</if>      
+		        <if test="CLOSED != null">CLOSED</if>,
+		        <if test="AUTH_KEY != null">AUTH_KEY,</if>  
+		        CREATED_AT
+			</trim>
+		VALUES
+			<trim prefix="(" prefixOverrides="" suffix=")" suffixOverrides=",">
+	   			#{OVERLAY_NETWORK_ID},                                        
+		        #{VERSION},
+		        #{OWNER_ID},
+		        #{EXPIRES},
+		        #{PAM_ENABLED},
+		        <if test="INDEX_URL != null">#{INDEX_URL},</if> 
+		        <if test="PAMS_URL != null">#{PAMS_URL},</if>  
+		        <if test="PAMS_INTERVAL != null">#{PAM_INTERVAL},</if>      
+		        <if test="CLOSED != null">#{CLOSED},</if>
+		        <if test="AUTH_KEY != null">#{AUTH_KEY},</if>  
+	   			NOW()
+			</trim>
+	</insert>
+	
+	<update id ="UPDATE_OVERLAY_NETWORK" parameterType="hashmap">
+		UPDATE uprep_overlay_network
+		SET    VERSION = #{VERSION},
+			   <if test="INDEX_URL != null">INDEX_URL = #{INDEX_URL},</if>
+		       <if test="EXPIRES != null">EXPIRES = #{EXPIRES},</if>
+		       <if test="CLOSED != null">CLOSED = #{CLOSED},</if>
+		       <if test="AUTH_KEY != null">AUTH_KEY = #{AUTH_KEY},</if>
+		       UPDATED_AT = now()
+		WHERE  
+			OVERLAY_NETWORK_ID = #{OVERLAY_NETWORK_ID}
+	</update>
+	
+	<update id ="UPDATE_PAM_CONF_OVERLAY_NETWORK" parameterType="hashmap">
+		UPDATE uprep_overlay_network
+		SET    PAM_ENABLED = #{PAM_ENABLED},
+			   <if test="PAMS_URL != null">PAMS_URL = #{PAMS_URL},</if>
+		       <if test="PAM_INTERVAL != null">PAM_INTERVAL = #{PAM_INTERVAL},</if>
+		       UPDATED_AT = now()
+		WHERE  
+			OVERLAY_NETWORK_ID = #{OVERLAY_NETWORK_ID}
+	</update>
+	
+	<update id ="UPDATE_VIRTUAL_PEER_COUNT_OVERLAY_NETWORK" parameterType="hashmap">
+		UPDATE uprep_overlay_network
+		SET    
+			   <if test="INCREASE == true">OMS_VP_CNT = OMS_VP_CNT + 1</if>
+		       <if test="INCREASE == false">OMS_VP_CNT = OMS_VP_CNT - 1</if>
+		WHERE  
+			OVERLAY_NETWORK_ID = #{OVERLAY_NETWORK_ID}
+	</update>
+	
+	<delete id="DELETE_OVERLAY_NETWORK" parameterType="hashmap" >
+		DELETE FROM 
+			uprep_overlay_network 
+		WHERE 
+			OVERLAY_NETWORK_ID = #{OVERLAY_NETWORK_ID}
+	</delete>
+	
+	<delete id="DELETE_ALL_OVERLAY_NETWORK" parameterType="hashmap" >
+		DELETE FROM 
+			uprep_overlay_network 
+		<where>
+			<trim prefixOverrides="AND">
+				<if test="OWNER_ID != null">
+					AND OWNER_ID LIKE CONCAT('%',#{OWNER_ID},'%')
+				</if>
+				<if test="OVERLAY_NETWORK_ID != null">
+					AND OVERLAY_NETWORK_ID = #{OVERLAY_NETWORK_ID}
+				</if>
+				<if test="INDEX_URL != null">
+					AND INDEX_URL LIKE CONCAT('%',#{INDEX_URL},'%')
+				</if>
+			</trim>
+		</where>
+	</delete>
+	
+</mapper>
