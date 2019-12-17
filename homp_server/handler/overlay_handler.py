@@ -28,8 +28,6 @@ class HybridOverlayCreation(Resource):
             heartbeat_timeout = request_data.get('heartbeat_timeout')
             overlay_auth = request_data.get('auth')
 
-            print(request_data)
-
             if title is None or overlay_type is None or sub_type is None or owner_id is None or description is None or \
                     heartbeat_interval is None or heartbeat_timeout is None or overlay_auth is None:
                 raise ValueError

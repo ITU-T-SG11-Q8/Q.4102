@@ -10,7 +10,7 @@ from classes.constants import RequestPath
 
 class WebSocketHandler(WebSocket):
     def handle(self):
-        print(self.address, 'message', self.data)
+        # print(self.address, 'message', self.data)
         try:
             data_dic = json.loads(self.data)
             get_peer = Factory.instance().get_peer()
@@ -18,13 +18,17 @@ class WebSocketHandler(WebSocket):
             if data_dic.get('type') == 'send_data':
                 if Factory.instance().is_used_tcp():
                     TcpMessageHandler.send_broadcast_data(get_peer, data_dic.get('data'))
+                elif Factory.instance().is_used_rtc():
+                    Factory.instance().get_rtc_hp2p_client().send_broadcast_data(data_dic.get('data'))
                 else:
-                    print('webrtc')
+                    print('Error Message')
             elif data_dic.get('type') == 'scan_tree':
                 if Factory.instance().is_used_tcp():
                     TcpMessageHandler.send_scan_tree(get_peer)
+                elif Factory.instance().is_used_rtc():
+                    Factory.instance().get_rtc_hp2p_client().send_scan_tree()
                 else:
-                    print('webrtc')
+                    print('Error Message')
             elif data_dic.get('type') == 'overlay_costmap':
                 param = {
                     'overlay_id': Factory.instance().get_peer().overlay_id

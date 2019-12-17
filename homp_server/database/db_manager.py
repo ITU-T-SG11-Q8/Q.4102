@@ -147,6 +147,7 @@ class DBManager:
 
             Service.get().set_overlay(overlay_id, overlay)
 
+    # DB Check(공공 데이터)
     def init_public_data(self):
         try:
             is_execute = False

@@ -2,7 +2,6 @@ from pyee import EventEmitter
 from aiortc import RTCPeerConnection
 from rtc.rtcsessiondescriptionex import RTCSessionDescriptionEx
 from datetime import datetime
-import json
 
 
 class RTCDataPeer(EventEmitter):
@@ -59,6 +58,24 @@ class RTCDataPeer(EventEmitter):
     @property
     def is_outgoing(self):
         return self.__is_outgoing
+
+    @property
+    def from_ticket_id(self):
+        return self.__from_ticket_id
+
+    def update_status(self, is_outgoing, ticket_id=None):
+        self.__is_outgoing = is_outgoing
+        self.is_parent = is_outgoing
+        if ticket_id is not None:
+            self.ticket_id = ticket_id
+        print('[Connection Update] => {0}'.format(self.to_information()))
+
+    def to_print(self):
+        print(self.to_information())
+
+    def to_information(self):
+        return "ID:{0}, Ticket ID:{1}, Outgoing:{2}, Primary:{3}, Is Parent:{4}".format(
+            self.connectedId, self.ticket_id, self.is_outgoing, self.is_primary, self.is_parent)
 
     def __handle_data(self, msg):
         # print(self.__connectedId + ' : ' + msg)
@@ -125,9 +142,11 @@ class RTCDataPeer(EventEmitter):
 
     def sendMessage(self, msg):
         if self.isDataChannelOpened:
-            self.__dataChannel.send(json.dumps(msg))
+            self.__dataChannel.send(msg)
 
     async def close(self):
         if self.__dataChannel is not None:
             self.__dataChannel.close()
             await self.__peerConnection.close()
+            self.__isDataChannelOpened = False
+            self.__handle_connection()

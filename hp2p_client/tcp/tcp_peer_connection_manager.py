@@ -20,8 +20,8 @@ class TcpPeerConnectionManager(PeerConnectionManager):
         return result_peer_id
 
     def send_message(self, message):
-        failed_connections = []
         lock.acquire()
+        failed_connections = []
 
         for p_value in self._peers.values():
             if type(p_value) == PeerConnection:
@@ -31,28 +31,29 @@ class TcpPeerConnectionManager(PeerConnectionManager):
                         connection.connection.sendall(message)
                     except:
                         failed_connections.append(connection)
-        lock.release()
 
         if len(failed_connections) > 0:
             for remove_peer_connection in failed_connections:
-                lock.acquire()
                 remove_peer_connection.connection.close()
-                lock.release()
                 # self.clear_peer(remove_peer_connection.peer_id)
 
+        lock.release()
+
     def send_message_to_peer(self, peer_id, message):
+        lock.acquire()
         connection: PeerConnection = self.get_peer_connection(peer_id)
+
         if connection is not None:
-            lock.acquire()
             try:
                 connection.connection.sendall(message)
             except:
                 connection.connection.close()
-            lock.release()
+
+        lock.release()
 
     def broadcast_message(self, sender, message):
-        failed_connections = []
         lock.acquire()
+        failed_connections = []
 
         for p_value in self._peers.values():
             if type(p_value) == PeerConnection:
@@ -63,18 +64,16 @@ class TcpPeerConnectionManager(PeerConnectionManager):
                     except:
                         failed_connections.append(connection)
 
-        lock.release()
-
         if len(failed_connections) > 0:
             for remove_peer_connection in failed_connections:
-                lock.acquire()
                 remove_peer_connection.connection.close()
-                lock.release()
                 # self.clear_peer(remove_peer_connection.peer_id)
 
+        lock.release()
+
     def broadcast_message_to_children(self, message):
-        failed_connections = []
         lock.acquire()
+        failed_connections = []
 
         for p_value in self._peers.values():
             if type(p_value) == PeerConnection:
@@ -85,11 +84,9 @@ class TcpPeerConnectionManager(PeerConnectionManager):
                     except:
                         failed_connections.append(connection)
 
-        lock.release()
-
         if len(failed_connections) > 0:
             for remove_peer_connection in failed_connections:
-                lock.acquire()
                 remove_peer_connection.connection.close()
-                lock.release()
                 # self.clear_peer(remove_peer_connection.peer_id)
+
+        lock.release()

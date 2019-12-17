@@ -21,7 +21,7 @@ class Peer:
         self.heartbeat_timeout = 60
         self.auth_password = None
         self.peer_expires = 60
-        self.scan_tree_sequence = 0
+        self.scan_tree_sequence = None
 
         self.is_tcp = None
         self.is_auto = True
@@ -37,6 +37,8 @@ class Peer:
         self.gui_web_socket_port = None
         self.gui_server_port = None
         self.has_udp_connection = False
+
+        self.public_data_port = None
 
     def get_address(self):
         if self.is_tcp is None:

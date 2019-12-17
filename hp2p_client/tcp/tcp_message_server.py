@@ -5,6 +5,8 @@ import socket
 import json
 import operator
 from datetime import datetime
+import uuid
+import random
 
 from config import PEER_CONFIG
 from data.factory import Factory, Peer
@@ -21,6 +23,8 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
     peer_manager = TcpPeerConnectionManager()
     Factory.instance().set_peer_manager(peer_manager)
     peer: Peer = Factory.instance().get_peer()
+    retry_count = 0
+    is_run_recovery = False
 
     _byteorder = 'little'
     _encoding = 'utf=8'
@@ -120,8 +124,11 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 elif MessageType.REQUEST_SCAN_TREE == request_message.message_type:
                     self.received_scan_tree(request_message, is_out_going, socket_peer_id)
 
-                elif MessageType.RESPONSE_HEARTBEAT == request_message.message_type:
-                    self.received_response_scan_tree(is_out_going, socket_peer_id)
+                elif MessageType.RESPONSE_SCAN_TREE_NON_LEAF == request_message.message_type:
+                    self.received_response_scan_tree_non_leaf(is_out_going, socket_peer_id)
+
+                elif MessageType.RESPONSE_SCAN_TREE_LEAF == request_message.message_type:
+                    self.received_response_scan_tree_leaf(request_message, is_out_going, socket_peer_id)
 
                 request_message = self.convert_bytes_to_message(sock)
 
@@ -161,11 +168,11 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 print('\n++++++++[HOPP] Close Socket...')
         except:
             print('\n++++++++[HOPP] Failed  Close Socket...')
-        finally:
-            peer_manager: TcpPeerConnectionManager = Factory.instance().get_peer_manager()
-            peer_id = peer_manager.get_peer_id_by_connection(connection)
-            if peer_id is not None:
-                peer_manager.clear_peer(peer_id)
+        # finally:
+        #     peer_manager: TcpPeerConnectionManager = Factory.instance().get_peer_manager()
+        #     peer_id = peer_manager.get_peer_id_by_connection(connection)
+        #     if peer_id is not None:
+        #         peer_manager.clear_peer(peer_id)
 
     @classmethod
     def get_peer_id_by_connection(cls, sock):
@@ -283,6 +290,11 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
             self.send_report()
 
     def recovery_connection(self):
+        if self.is_run_recovery:
+            print('\n++++++++[HOPP] Already to IS_RUN_RECOVERY...')
+            return
+
+        self.is_run_recovery = True
         print('\n++++++++[HOPP] START Recovery Connection...')
         self.send_web_socket('RECOVER_CONNECTION.')
 
@@ -300,20 +312,26 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
         else:
             self.recovery_join()
 
-    def recovery_join(self):
-        print('\n++++++++[HOPP] SEND RECOVERY HELLO')
-        self.send_web_socket('SEND RECOVERY HELLO.')
+        print('\n++++++++[HOPP] End Recovery Connection...')
+        self.is_run_recovery = False
 
-        self.peer_manager.is_run_probe_peer = False
-        self.peer_manager.is_run_primary_peer = False
-        self.peer_manager.is_first_peer_set_primary = False
+    @classmethod
+    def recovery_join(cls):
+        print('\n++++++++[HOPP] SEND RECOVERY HELLO')
+        cls.send_web_socket('SEND RECOVERY HELLO.')
+
+        peer_manager: TcpPeerConnectionManager = Factory.instance().get_peer_manager()
+        peer_manager.is_run_probe_peer = False
+        peer_manager.is_run_primary_peer = False
+        peer_manager.is_first_peer_set_primary = False
 
         handler: HompMessageHandler = Factory.instance().get_homp_handler()
-        recovery_response = handler.recovery(self.peer)
+        get_peer: Peer = Factory.instance().get_peer()
+        recovery_response = handler.recovery(get_peer)
 
         if recovery_response is None:
             print('\n++++++++[HOPP] Failed RECOVERY JOIN')
-            self.send_web_socket('FAILED RECOVERY HELLO.')
+            cls.send_web_socket('FAILED RECOVERY HELLO.')
         else:
             if len(recovery_response) > 0:
                 is_process = False
@@ -321,17 +339,17 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                     target_peer_id = peer_info.get('peer_id')
                     target_address = peer_info.get('address')
 
-                    if self.peer.peer_id == target_peer_id:
-                        self.peer.is_top_peer = True
+                    if get_peer.peer_id == target_peer_id:
+                        get_peer.is_top_peer = True
                         print("Top Peer...", flush=True)
-                        self.send_web_socket('TOP PEER.')
+                        cls.send_web_socket('TOP PEER.')
                         is_process = True
                         break
                     else:
                         print("Recovery Join...", target_peer_id, target_address, flush=True)
-                        self.send_web_socket('RECOVERY JOIN.')
+                        cls.send_web_socket('RECOVERY JOIN.')
 
-                        recovery_hello_result = self.send_recovery_hello_peer(self.peer, target_address)
+                        recovery_hello_result = cls.send_recovery_hello_peer(get_peer, target_address)
                         if recovery_hello_result:
                             TcpMessageHandler.run_estab_peer_timer()
                             is_process = True
@@ -339,17 +357,11 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
 
                 if not is_process:
                     # TODO 복구
-                    self.send_web_socket('RECOVERY JOIN LIST IS NONE.')
-                    print('\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                    print('++++++++[HOPP] (RECOVERY JOIN) HELLO_PEER List is None... 네트웨크에 참가 실패.')
-                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                    cls.send_web_socket('RECOVERY JOIN LIST IS NONE.')
             else:
                 # TODO 복구
-                self.send_web_socket('RECOVERY JOIN LIST IS NONE.')
-                handler.report(self.peer, self.peer_manager)
-                print('\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                print('(RECOVERY JOIN) HELLO_PEER  List is None... 네트웨크에 참가 실패. 서버 문제 발생...')
-                print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                cls.send_web_socket('RECOVERY JOIN LIST IS NONE.')
+                # handler.report(self.peer, self.peer_manager)
 
     def reassignment_connections_for_recovery(self, peer_id, ticket_id):
         return self.peer_manager.get_in_candidate_remove_peer_id(peer_id, ticket_id)
@@ -435,8 +447,11 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 elif MessageType.REQUEST_SCAN_TREE == request_message.message_type:
                     self.received_scan_tree(request_message, is_out_going, socket_peer_id)
 
-                elif MessageType.RESPONSE_HEARTBEAT == request_message.message_type:
-                    self.received_response_scan_tree(is_out_going, socket_peer_id)
+                elif MessageType.RESPONSE_SCAN_TREE_NON_LEAF == request_message.message_type:
+                    self.received_response_scan_tree_non_leaf(is_out_going, socket_peer_id)
+
+                elif MessageType.RESPONSE_SCAN_TREE_LEAF == request_message.message_type:
+                    self.received_response_scan_tree_leaf(request_message, is_out_going, socket_peer_id)
 
                 request_message = self.convert_bytes_to_message(sock)
 
@@ -453,7 +468,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
         hello_response_message = {
             'RspCode': MessageType.RESPONSE_HELLO_PEER
         }
-        print('\n++++++++[HOPP] SEND HELLO_PEER RESPONSE', hello_response_message)
+        print('\n++++++++[HOPP] SEND HELLO_PEER RESPONSE')
         self.send_web_socket('SEND HELLO_PEER RESPONSE.')
 
         response_message = self.convert_message_to_bytes(hello_response_message)
@@ -485,7 +500,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 if new_conn_num > 0:
                     operation['conn_num'] = math.ceil(new_conn_num / children_count)
 
-                    print('\n++++++++[HOPP] HELLO_PEER REQUEST !!!BROADCAST!!!', received_message)
+                    print('\n++++++++[HOPP] HELLO_PEER REQUEST !!!BROADCAST!!!')
                     self.send_web_socket('SEND BROADCAST HELLO_PEER.')
                     broadcast_hello_message = self.convert_message_to_bytes(received_message)
                     self.peer_manager.broadcast_message_to_children(broadcast_hello_message)
@@ -502,10 +517,10 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                     self.peer_manager.un_assignment_peer(target_peer_id)
         else:
             if target_ticket_id <= self.peer.ticket_id:
-                print('\n++++++++[HOPP] RECOVERY ==  target_ticket_id.... bigger than me', received_message)
+                print('\n++++++++[HOPP] RECOVERY ==  target_ticket_id.... bigger than me')
                 return
 
-            print('\n++++++++[HOPP] RECOVERY == HELLO_PEER', target_peer_id)
+            print('\n++++++++[HOPP] RECOVERY == HELLO_PEER')
             self.send_web_socket('RECOVERY HELLO_PEER.')
             is_assignment_recovery = True
             if not is_assignment:
@@ -522,7 +537,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 if new_conn_num > 0:
                     operation['conn_num'] = math.ceil(new_conn_num / children_count)
 
-                    print('\n++++++++[HOPP] RECOVERY ==  HELLO_PEER REQUEST !!!BROADCAST!!!', received_message)
+                    print('\n++++++++[HOPP] RECOVERY ==  HELLO_PEER REQUEST !!!BROADCAST!!!')
                     self.send_web_socket('BROADCAST RECOVERY HELLO_PEER.')
                     broadcast_hello_message = self.convert_message_to_bytes(received_message)
                     self.peer_manager.broadcast_message_to_children(broadcast_hello_message)
@@ -566,7 +581,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 estab_response_message['RspCode'] = MessageType.RESPONSE_ESTAB_PEER
                 self.peer_manager.add_peer(target_peer_id, target_ticket_id, False, True, sock)
 
-        print('\n++++++++[HOPP] SEND ESTAB_PEER RESPONSE', estab_response_message)
+        print('\n++++++++[HOPP] SEND ESTAB_PEER RESPONSE')
         self.send_web_socket('SEND ESTAB_PEER RESPONSE.')
         response_message = self.convert_message_to_bytes(estab_response_message)
         self.sendall_tcp_message(sock, response_message)
@@ -607,7 +622,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 }
             }
         }
-        print('\n++++++++[HOPP] SEND PROBE_PEE RESPONSE', probe_response_message)
+        print('\n++++++++[HOPP] SEND PROBE_PEE RESPONSE')
         self.send_web_socket('SEND PROBE_PEER RESPONSE.')
 
         response_message = self.convert_message_to_bytes(probe_response_message)
@@ -643,7 +658,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
             if self.peer.using_web_gui:
                 Factory.instance().get_web_socket_handler().send_connection_change(True)
 
-        print('\n++++++++[HOPP] SEND SET_PRIMARY RESPONSE', primary_response_message)
+        print('\n++++++++[HOPP] SEND SET_PRIMARY RESPONSE')
         self.send_web_socket('SEND SET_PRIMARY RESPONSE.')
 
         response_message = self.convert_message_to_bytes(primary_response_message)
@@ -698,14 +713,14 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
 
     def received_set_candidate(self, sock, is_out_going, socket_peer_id):
         if is_out_going:
-            print('\n++++++++[HOPP] RECEIVED OUT_GOING SET_CANDIDATE ', socket_peer_id, )
+            print('\n++++++++[HOPP] RECEIVED OUT_GOING SET_CANDIDATE ', socket_peer_id)
         else:
             print('\n++++++++[HOPP] RECEIVED IN_COMING SET_CANDIDATE ', socket_peer_id)
 
         candidate_response_message = {
             'RspCode': MessageType.RESPONSE_SET_CANDIDATE
         }
-        print('\n++++++++[HOPP] SEND SET_CANDIDATE RESPONSE', candidate_response_message)
+        print('\n++++++++[HOPP] SEND SET_CANDIDATE RESPONSE')
         self.send_web_socket('SEND SET_CANDIDATE RESPONSE.')
         response_message = self.convert_message_to_bytes(candidate_response_message)
 
@@ -742,7 +757,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
             broadcast_data_response_message = {
                 'RspCode': MessageType.RESPONSE_BROADCAST_DATA
             }
-            print('\n++++++++[HOPP] SEND BROADCAST_DATA RESPONSE', broadcast_data_response_message)
+            print('\n++++++++[HOPP] SEND BROADCAST_DATA RESPONSE')
             self.send_web_socket('SEND BROADCAST_DATA RESPONSE.')
 
             response_message = self.convert_message_to_bytes(broadcast_data_response_message)
@@ -771,7 +786,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
             release_response_message = {
                 'RspCode': MessageType.RESPONSE_RELEASE_PEER
             }
-            print('\n++++++++[HOPP] SEND RELEASE_PEER RESPONSE', release_response_message)
+            print('\n++++++++[HOPP] SEND RELEASE_PEER RESPONSE')
             self.send_web_socket('SEND RELEASE_PEER RESPONSE.')
 
             response_message = self.convert_message_to_bytes(release_response_message)
@@ -806,7 +821,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 'RspCode': MessageType.RESPONSE_HEARTBEAT
             }
             if PEER_CONFIG['PRINT_HEARTBEAT_LOG']:
-                print('\n++++++++[HOPP] SEND HEARTBEAT RESPONSE', release_response_message)
+                print('\n++++++++[HOPP] SEND HEARTBEAT RESPONSE')
                 self.send_web_socket('SEND HEARTBEAT RESPONSE.')
 
             response_message = self.convert_message_to_bytes(release_response_message)
@@ -834,29 +849,19 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
 
         params_overlay = request_message.header.get('ReqParams').get('overlay')
         params_peer = request_message.header.get('ReqParams').get('peer')
+        cseq = request_message.header.get('ReqParams').get('cseq')
         via_list = params_overlay.get('via')
-        target_peer_id, target_peer_address = via_list[0]
-
-        if self.peer.peer_id == target_peer_id:
-            via_list.remove((target_peer_id, target_peer_address))
-
-            if len(via_list) > 0:
-                target_peer_id, target_peer_address = via_list[0]
-            else:
-                target_peer_id = None
-                target_peer_address = None
-
+        # target_peer_id, target_peer_address = via_list[0]
         path_list = params_overlay.get('path')
-        path_list.insert(0, (self.peer.peer_id, self.peer.get_address()))
+        path_list.insert(0, [self.peer.peer_id, self.peer.ticket_id, self.peer.get_address()])
 
-        children_cnt = self.peer_manager.get_children_count()
-        rsp_code = MessageType.RESPONSE_SCAN_TREE_NON_LEAF if children_cnt > 0 else MessageType.RESPONSE_SCAN_TREE_LEAF
+        is_leaf = self.peer_manager.is_leaf(socket_peer_id)
         scan_tree_response_message = {
-            'RspCode': rsp_code,
+            'RspCode': MessageType.RESPONSE_SCAN_TREE_LEAF if is_leaf else MessageType.RESPONSE_SCAN_TREE_NON_LEAF,
             'RspParams': {
+                'cseq': cseq,
                 'overlay': {
                     'overlay_id': params_overlay.get('overlay_id'),
-                    's_seq': params_overlay.get('s_seq'),
                     'via': via_list,
                     'path': path_list
                 },
@@ -869,19 +874,20 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
         }
 
         if PEER_CONFIG['PRINT_SCAN_TREE_LOG']:
-            print('\n++++++++[HOPP] SEND SCAN_TREE RESPONSE', scan_tree_response_message)
+            print('\n++++++++[HOPP] SEND SCAN_TREE RESPONSE')
             self.send_web_socket('SEND SCAN_TREE RESPONSE.')
 
         response_message = self.convert_message_to_bytes(scan_tree_response_message)
-        self.peer_manager.send_message_to_peer(target_peer_id, response_message)
+        self.peer_manager.send_message_to_peer(socket_peer_id, response_message)
 
-        if children_cnt > 0:
+        if not is_leaf:
+            via_list.insert(0, [self.peer.peer_id, self.peer.get_address()])
             scan_tree_message = {
                 'ReqCode': MessageType.REQUEST_SCAN_TREE,
                 'ReqParams': {
+                    'cseq': cseq,
                     'overlay': {
                         'overlay_id': params_overlay.get('overlay_id'),
-                        's_seq': params_overlay.get('s_seq'),
                         'via': via_list,
                         'path': path_list
                     },
@@ -892,24 +898,67 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                     }
                 }
             }
+
             if PEER_CONFIG['PRINT_SCAN_TREE_LOG']:
-                print('\n++++++++[HOPP] SEND SCAN_TREE (RELAY)', scan_tree_response_message)
+                print('\n++++++++[HOPP] SEND SCAN_TREE (RELAY)')
                 self.send_web_socket('SEND SCAN_TREE (RELAY).')
 
             response_message = self.convert_message_to_bytes(scan_tree_message)
             self.peer_manager.broadcast_message(socket_peer_id, response_message)
 
-    def received_response_scan_tree(self, is_out_going, socket_peer_id):
-        if PEER_CONFIG['PRINT_HEARTBEAT_LOG']:
+    def received_response_scan_tree_non_leaf(self, is_out_going, socket_peer_id):
+        if PEER_CONFIG['PRINT_SCAN_TREE_LOG']:
             if is_out_going:
-                print('\n++++++++[HOPP] RECEIVED OUT_GOING RESPONSE_HEARTBEAT ', socket_peer_id)
+                print('\n++++++++[HOPP] RECEIVED OUT_GOING RESPONSE_SCAN_TREE_NON_LEAF ', socket_peer_id)
             else:
-                print('\n++++++++[HOPP] RECEIVED IN_COMING RESPONSE_HEARTBEAT ', socket_peer_id)
-            self.send_web_socket('RECEIVED HEARTBEAT RESPONSE.')
+                print('\n++++++++[HOPP] RECEIVED IN_COMING RESPONSE_SCAN_TREE_NON_LEAF ', socket_peer_id)
+            self.send_web_socket('RECEIVED SCAN TREE(NON_LEAF) RESPONSE.')
 
-        peer_connection: PeerConnection = self.peer_manager.get_peer_connection(socket_peer_id)
-        if peer_connection is not None:
-            peer_connection.update_time = datetime.now()
+    def received_response_scan_tree_leaf(self, request_message, is_out_going, socket_peer_id):
+        if PEER_CONFIG['PRINT_SCAN_TREE_LOG']:
+            if is_out_going:
+                print('\n++++++++[HOPP] RECEIVED OUT_GOING RESPONSE_SCAN_TREE_NON_LEAF ', socket_peer_id)
+            else:
+                print('\n++++++++[HOPP] RECEIVED IN_COMING RESPONSE_SCAN_TREE_NON_LEAF ', socket_peer_id)
+            self.send_web_socket('RECEIVED SCAN TREE(NON_LEAF) RESPONSE.')
+
+        params_overlay = request_message.header.get('RspParams').get('overlay')
+        params_peer = request_message.header.get('RspParams').get('peer')
+        cseq = request_message.header.get('RspParams').get('cseq')
+        via_list = params_overlay.get('via')
+        target_peer_id, target_peer_address = via_list[0]
+
+        if self.peer.peer_id == target_peer_id:
+            via_list.remove([target_peer_id, target_peer_address])
+            if len(via_list) > 0:
+                target_peer_id, target_peer_address = via_list[0]
+                scan_tree_response_message = {
+                    'RspCode': MessageType.RESPONSE_SCAN_TREE_LEAF,
+                    'RspParams': {
+                        'cseq': cseq,
+                        'overlay': {
+                            'overlay_id': params_overlay.get('overlay_id'),
+                            'via': via_list,
+                            'path': params_overlay.get('path')
+                        },
+                        'peer': {
+                            'peer_id': params_peer.get('peer_id'),
+                            'address': params_peer.get('address'),
+                            'ticket_id': params_peer.get('ticket_id')
+                        }
+                    }
+                }
+
+                if PEER_CONFIG['PRINT_SCAN_TREE_LOG']:
+                    print('\n++++++++[HOPP] SEND SCAN_TREE RESPONSE')
+                    self.send_web_socket('SEND SCAN_TREE RESPONSE.')
+
+                response_message = self.convert_message_to_bytes(scan_tree_response_message)
+                self.peer_manager.send_message_to_peer(target_peer_id, response_message)
+            else:
+                if self.peer.peer_id == params_peer.get('peer_id') and self.peer.scan_tree_sequence == cseq:
+                    if self.peer.using_web_gui:
+                        Factory.instance().get_web_socket_handler().send_scan_tree_path(params_overlay.get('path'))
 
     ###################
     ###################
@@ -945,7 +994,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                     }
                 }
 
-                print('\n++++++++[HOPP] SEND HELLO REQUEST', hello_message)
+                print('\n++++++++[HOPP] SEND HELLO REQUEST')
                 cls.send_web_socket('SEND HELLO_PEER.')
 
                 request_message = cls.convert_message_to_bytes(hello_message)
@@ -954,7 +1003,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
 
                 response_message: HoppMessage = cls.convert_bytes_to_message(sock)
                 cls.send_web_socket('RECEIVED HELLO_PEER RESPONSE.')
-                print('\n++++++++[HOPP] RECEIVED HELLO RESPONSE ', response_message.header)
+                print('\n++++++++[HOPP] RECEIVED HELLO RESPONSE ')
                 print('\n++++++++[HOPP] [{0}:{1}] DISCONNECT OUT GOING SOCKET'.format(sock.getsockname()[0],
                                                                                       sock.getsockname()[1]))
                 cls.close_tcp_connection(sock)
@@ -995,14 +1044,14 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                     }
                 }
 
-                print('\n++++++++[HOPP] SEND ESTABLISH REQUEST', establish_message)
+                print('\n++++++++[HOPP] SEND ESTABLISH REQUEST')
                 self.send_web_socket('SEND ESTABLISH_PEER.')
 
                 request_message = self.convert_message_to_bytes(establish_message)
                 self.sendall_tcp_message(sock, request_message)
 
                 response_message: HoppMessage = self.convert_bytes_to_message(sock)
-                print('\n++++++++[HOPP] RECEIVED ESTABLISH RESPONSE', response_message.header)
+                print('\n++++++++[HOPP] RECEIVED ESTABLISH RESPONSE')
                 self.send_web_socket('RECEIVED ESTABLISH_PEER RESPONSE.')
 
                 if response_message.header.get('RspCode') == MessageType.RESPONSE_ESTAB_PEER:
@@ -1050,9 +1099,26 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
             else:
                 # TODO 복구
                 cls.send_web_socket('ESTAB_PEER is None.')
-                print('\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                print('++++++++[HOPP] ESTAB_PEER is None... 네트웨크에 참가 실패.')
-                print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                cls.run_none_estab_peer_recovery_timer()
+
+    @classmethod
+    def run_none_estab_peer_recovery_timer(cls):
+        print('\n++++++++[HOPP] ESTAB_PEER is None.')
+        if not Factory.instance().get_client_scheduler().is_set_checked_primary_scheduler():
+            peer_manager: TcpPeerConnectionManager = Factory.instance().get_peer_manager()
+            get_peer: Peer = Factory.instance().get_peer()
+            if peer_manager.is_none_connection() and not get_peer.is_top_peer and not get_peer.isOwner:
+                print('\n++++++++[HOPP] RUN_NONE_ESTAB_PEER_RECOVERY_TIMER.')
+                threading.Timer(PEER_CONFIG['RETRY_OVERLAY_RECOVERY_INTERVAL'], cls.none_estab_peer_recovery).start()
+
+    @classmethod
+    def none_estab_peer_recovery(cls):
+        if not Factory.instance().get_client_scheduler().is_set_checked_primary_scheduler():
+            peer_manager: TcpPeerConnectionManager = Factory.instance().get_peer_manager()
+            get_peer: Peer = Factory.instance().get_peer()
+            if peer_manager.is_none_connection() and not get_peer.is_top_peer and not get_peer.isOwner:
+                print('\n++++++++[HOPP] Call NONE_ESTAB_PEER_RECOVERY.')
+                cls.recovery_join()
 
     @classmethod
     def send_probe_peer(cls, peer_connection: PeerConnection):
@@ -1064,7 +1130,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 }
             }
         }
-        print('\n++++++++[HOPP] SEND PROBE_PEER REQUEST', probe_message)
+        print('\n++++++++[HOPP] SEND PROBE_PEER REQUEST')
         cls.send_web_socket('SEND PROBE_PEER.')
 
         request_message = cls.convert_message_to_bytes(probe_message)
@@ -1115,6 +1181,8 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
         if primary_peer_connection is not None:
             peer_manager.delete_establish_peer(primary_peer_connection.peer_id)
             cls.send_set_primary(primary_peer_connection)
+        else:
+            peer_manager.is_run_primary_peer = False
 
     def send_set_primary_is_skip_probe(self, sock):
         if not self.peer_manager.is_first_peer_set_primary:
@@ -1123,20 +1191,22 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
             primary_message = {
                 'ReqCode': MessageType.REQUEST_SET_PRIMARY
             }
-            print('\n++++++++[HOPP] SEND SET_PRIMARY REQUEST(SKIP_PROBE)', primary_message)
+            print('\n++++++++[HOPP] SEND SET_PRIMARY REQUEST(SKIP_PROBE)')
             request_message = self.convert_message_to_bytes(primary_message)
             self.sendall_tcp_message(sock, request_message)
 
     @classmethod
     def send_set_primary(cls, peer_connection: PeerConnection):
-        primary_message = {
-            'ReqCode': MessageType.REQUEST_SET_PRIMARY
-        }
-        print('\n++++++++[HOPP] SEND SET_PRIMARY REQUEST', primary_message)
-        cls.send_web_socket('SEND SET_PRIMARY.')
+        peer_manager: TcpPeerConnectionManager = Factory.instance().get_peer_manager()
+        if not peer_manager.has_parent_primary():
+            primary_message = {
+                'ReqCode': MessageType.REQUEST_SET_PRIMARY
+            }
+            print('\n++++++++[HOPP] SEND SET_PRIMARY REQUEST')
+            cls.send_web_socket('SEND SET_PRIMARY.')
 
-        request_message = cls.convert_message_to_bytes(primary_message)
-        cls.sendall_tcp_message(peer_connection.connection, request_message)
+            request_message = cls.convert_message_to_bytes(primary_message)
+            cls.sendall_tcp_message(peer_connection.connection, request_message)
 
     @classmethod
     def send_to_all_set_candidate(cls):
@@ -1156,7 +1226,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
         candidate_message = {
             'ReqCode': MessageType.REQUEST_SET_CANDIDATE
         }
-        print('\n++++++++[HOPP] SEND SET_CANDIDATE REQUEST', candidate_message)
+        print('\n++++++++[HOPP] SEND SET_CANDIDATE REQUEST')
         cls.send_web_socket('SEND SET_CANDIDATE.')
 
         request_message = cls.convert_message_to_bytes(candidate_message)
@@ -1187,14 +1257,14 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 }
             }
 
-            print('\n++++++++[HOPP] SEND BROADCAST_DATA REQUEST', data_message)
+            print('\n++++++++[HOPP] SEND BROADCAST_DATA REQUEST')
             cls.send_web_socket('SEND BROADCAST_DATA.')
 
             request_message = cls.convert_message_to_bytes(data_message, bytes_data)
             get_peer_manager.send_message(request_message)
 
     def relay_broadcast_data(self, sender, hopp_message: HoppMessage):
-        print('\n++++++++[HOPP] RELAY BROADCAST_DATA REQUEST', hopp_message.header)
+        # print('\n++++++++[HOPP] RELAY BROADCAST_DATA REQUEST', hopp_message.header)
         # self.send_web_socket('RELAY BROADCAST_DATA.')
 
         bytes_data = self.convert_to_bytes(hopp_message.content)
@@ -1217,7 +1287,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 }
             }
 
-            print('\n++++++++[HOPP] SEND RELEASE_PEER REQUEST', release_message)
+            print('\n++++++++[HOPP] SEND RELEASE_PEER REQUEST')
             cls.send_web_socket('SEND RELEASE_PEER.')
 
             request_message = cls.convert_message_to_bytes(release_message)
@@ -1247,7 +1317,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                     }
                 }
             }
-            print('\n++++++++[HOPP] SEND TO ALL RELEASE_PEER REQUEST', release_message)
+            print('\n++++++++[HOPP] SEND TO ALL RELEASE_PEER REQUEST')
             cls.send_web_socket('SEND TO ALL RELEASE_PEER.')
 
             request_message = cls.convert_message_to_bytes(release_message)
@@ -1281,7 +1351,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                     'ReqCode': MessageType.REQUEST_HEARTBEAT
                 }
                 if PEER_CONFIG['PRINT_HEARTBEAT_LOG']:
-                    print('\n++++++++[HOPP] SEND HEARTBEAT REQUEST', heartbeat_message, peer_connection.peer_id)
+                    print('\n++++++++[HOPP] SEND HEARTBEAT REQUEST', peer_connection.peer_id)
                     cls.send_web_socket('SEND HEARTBEAT.')
 
                 request_message = cls.convert_message_to_bytes(heartbeat_message)
@@ -1330,7 +1400,8 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                     if PEER_CONFIG['PRINT_HEARTBEAT_LOG']:
                         print('\n----------[Heartbeat] Connection is alive =>', peer_connection.peer_id)
 
-    def send_recovery_hello_peer(self, peer: Peer, target_address):
+    @classmethod
+    def send_recovery_hello_peer(cls, peer: Peer, target_address):
         if 'tcp://' in target_address:
             sock = None
             try:
@@ -1361,39 +1432,44 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                     }
                 }
 
-                print('\n++++++++[HOPP] SEND HELLO (RECOVERY) REQUEST', hello_recovery_message)
-                self.send_web_socket('SEND HELLO_PEER (RECOVERY).')
+                print('\n++++++++[HOPP] SEND HELLO (RECOVERY) REQUEST')
+                cls.send_web_socket('SEND HELLO_PEER (RECOVERY).')
 
-                request_message = self.convert_message_to_bytes(hello_recovery_message)
-                self.sendall_tcp_message(sock, request_message)
+                request_message = cls.convert_message_to_bytes(hello_recovery_message)
+                cls.sendall_tcp_message(sock, request_message)
 
-                response_message: HoppMessage = self.convert_bytes_to_message(sock)
-                print('\n++++++++[HOPP] RECEIVED HELLO (RECOVERY) RESPONSE ', response_message.header)
+                response_message: HoppMessage = cls.convert_bytes_to_message(sock)
+                print('\n++++++++[HOPP] RECEIVED HELLO (RECOVERY) RESPONSE ')
                 print('\n++++++++[HOPP] [{0}:{1}] DISCONNECT OUT GOING SOCKET'.format(sock.getsockname()[0],
                                                                                       sock.getsockname()[1]))
-                self.send_web_socket('RECEIVED HELLO_PEER RESPONSE(RECOVERY).')
-
-                self.close_tcp_connection(sock)
+                cls.send_web_socket('RECEIVED HELLO_PEER RESPONSE(RECOVERY).')
+                cls.close_tcp_connection(sock)
 
                 return True if response_message.header.get('RspCode') == MessageType.RESPONSE_HELLO_PEER else False
             except Exception as e:
                 print('\n++++++++[HOPP] Error send_hello (RECOVERY) \n', e)
-                self.close_tcp_connection(sock)
+                cls.close_tcp_connection(sock)
 
                 return None
         else:
             return None
 
     @classmethod
+    def create_tree_sequence(cls):
+        uuid_str = str(uuid.uuid1())
+        keys = uuid_str.split('-')
+        return keys[0] + "#" + str(random.randrange(1, 99))
+
+    @classmethod
     def send_scan_tree(cls, peer: Peer):
-        peer.scan_tree_sequence += 1
+        peer.scan_tree_sequence = cls.create_tree_sequence()
         scan_tree_message = {
             'ReqCode': MessageType.REQUEST_SCAN_TREE,
             'ReqParams': {
+                'cseq': peer.scan_tree_sequence,
                 'overlay': {
                     'overlay_id': peer.overlay_id,
-                    's_seq': peer.scan_tree_sequence,
-                    'via': [(peer.peer_id, peer.get_address())],
+                    'via': [[peer.peer_id, peer.get_address()]],
                     'path': []
                 },
                 'peer': {
@@ -1403,7 +1479,7 @@ class TcpMessageHandler(socketserver.BaseRequestHandler):
                 }
             }
         }
-        print('\n++++++++[HOPP] SEND SCAN_TREE REQUEST', scan_tree_message)
+        print('\n++++++++[HOPP] SEND SCAN_TREE REQUEST')
         cls.send_web_socket('SEND SCAN_TREE.')
 
         request_message = cls.convert_message_to_bytes(scan_tree_message)

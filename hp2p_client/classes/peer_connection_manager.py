@@ -27,6 +27,13 @@ class PeerConnectionManager(metaclass=ABCMeta):
         self.is_destroy = False
         self.is_first_peer_set_primary = False
 
+    def is_none_connection(self):
+        lock.acquire()
+        result = len(self._peers) == 0 and len(self._primary_list) == 0 and len(
+            self._out_going_candidate_list) == 0 and len(self._in_coming_candidate_list) == 0
+        lock.release()
+        return result
+
     def get_in_coming_candidate_list(self):
         lock.acquire()
         _in_coming_candidate_list = self._in_coming_candidate_list.copy()
@@ -77,8 +84,8 @@ class PeerConnectionManager(metaclass=ABCMeta):
         return result
 
     def get_children_count(self):
-        count = 0
         lock.acquire()
+        count = 0
 
         for connection in self._peers.values():
             if connection.is_primary and not connection.is_parent:
@@ -87,19 +94,21 @@ class PeerConnectionManager(metaclass=ABCMeta):
         lock.release()
         return count
 
-    # def is_leaf(self):
-    #     result = False
+    # def has_primary_except_sender(self, sender):
     #     lock.acquire()
-    #
-    #     if len(self._primary_list) == 0:
-    #
-    #
+    #     result = sender in self._primary_list and len(self._primary_list) > 1
     #     lock.release()
     #     return result
 
-    def get_in_candidate_remove_peer_id(self, target_peer_id, target_ticket_id):
-        remove_peer_id = None
+    def is_leaf(self, sender):
         lock.acquire()
+        result = sender in self._primary_list and len(self._primary_list) == 1
+        lock.release()
+        return result
+
+    def get_in_candidate_remove_peer_id(self, target_peer_id, target_ticket_id):
+        lock.acquire()
+        remove_peer_id = None
 
         if self.max_in_candidate <= len(
                 self._in_coming_candidate_list) and target_peer_id not in self._in_coming_candidate_list:
@@ -144,8 +153,8 @@ class PeerConnectionManager(metaclass=ABCMeta):
         lock.release()
 
     def establish_peer(self, peer_id):
-        result = False
         lock.acquire()
+        result = False
 
         if self.max_out_candidate - len(
                 self._out_going_candidate_list) > 0 and peer_id not in self._out_going_candidate_list:
@@ -162,8 +171,8 @@ class PeerConnectionManager(metaclass=ABCMeta):
         lock.release()
 
     def assignment_peer(self, peer_id):
-        result = False
         lock.acquire()
+        result = False
 
         if self.max_in_candidate - len(
                 self._in_coming_candidate_list) > 0 and peer_id not in self._in_coming_candidate_list:
@@ -178,9 +187,22 @@ class PeerConnectionManager(metaclass=ABCMeta):
         self._in_coming_candidate_list.remove(peer_id)
         lock.release()
 
-    def set_primary_peer(self, peer_id, is_out_going):
-        result = False
+    def has_parent_primary(self):
         lock.acquire()
+        result = False
+
+        for peer_id in self._primary_list:
+            connection: PeerConnection = self._peers[peer_id]
+            if connection.is_primary and connection.is_parent:
+                result = True
+                break
+
+        lock.release()
+        return result
+
+    def set_primary_peer(self, peer_id, is_out_going):
+        lock.acquire()
+        result = False
 
         if peer_id in self._peers and self.max_primary_connection - len(self._primary_list) > 0:
             if is_out_going and peer_id in self._out_going_candidate_list:
@@ -201,8 +223,8 @@ class PeerConnectionManager(metaclass=ABCMeta):
         return result
 
     def add_peer(self, peer_id, ticket_id, is_primary, is_parent, connection, address=None):
-        result = False
         lock.acquire()
+        result = False
 
         if peer_id not in self._peers and peer_id in self._in_coming_candidate_list or peer_id in self._out_going_candidate_list:
             print('\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!ADD PEER', peer_id)
@@ -213,8 +235,8 @@ class PeerConnectionManager(metaclass=ABCMeta):
         return result
 
     def remove_peer(self, peer_id):
-        result = False
         lock.acquire()
+        result = False
 
         if peer_id in self._peers:
             del self._peers[peer_id]
@@ -224,8 +246,8 @@ class PeerConnectionManager(metaclass=ABCMeta):
         return result
 
     def clear_peer(self, peer_id):
-        print('\n$$$$CLEAR PEER', peer_id)
         lock.acquire()
+        print('\n$$$$CLEAR PEER', peer_id)
 
         if peer_id in self._peers:
             del self._peers[peer_id]
@@ -242,8 +264,8 @@ class PeerConnectionManager(metaclass=ABCMeta):
         lock.release()
 
     def get_peer_connection(self, peer_id):
-        get_connection = None
         lock.acquire()
+        get_connection = None
 
         if peer_id in self._peers:
             get_connection = self._peers[peer_id]

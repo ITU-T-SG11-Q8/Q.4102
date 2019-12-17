@@ -25,12 +25,6 @@ class WebSocketHandler(WebSocket):
                         Service.get().get_web_socket_handler().add_web_socket_peer(peer_id, self)
                     elif data_dic.get('action') == 'bye':
                         Service.get().get_web_socket_handler().delete_web_socket_peer(self)
-                elif 'to_peer_id' in data_dic:
-                    to_peer_id = data_dic.get('to_peer_id')
-                    if data_dic.get('action') == 'hello_peer':
-                        result = Service.get().get_web_socket_handler().send_message_to_peer(to_peer_id, data_dic)
-                        if not result:
-                            self.send_message(json.dumps({'action': 'failed_hello_peer'}))
                 elif 'toid' in data_dic:
                     to_id = data_dic.get('toid')
                     Service.get().get_web_socket_handler().send_message_to_peer(to_id, data_dic)

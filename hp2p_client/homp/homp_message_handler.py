@@ -30,7 +30,6 @@ class HompMessageHandler:
                     "access_key": peer.auth_access_key
                 }
             }
-            print(data)
             response = requests.post(self._toms_url + RequestPath.OverlayCreation, json=data)
             if response.status_code == 200:
                 result_data = response.json()

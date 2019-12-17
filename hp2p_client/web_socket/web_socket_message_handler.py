@@ -38,10 +38,10 @@ class WebSocketMessageHandler:
         }
         self._send_message_to_client(send_message)
 
-    def send_scan_tree(self, costmap):
+    def send_scan_tree_path(self, path):
         send_message = {
             "type": "scan_tree",
-            "data": costmap
+            "data": path
         }
         self._send_message_to_client(send_message)
 

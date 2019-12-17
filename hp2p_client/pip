@@ -2,5 +2,3 @@ pip install requests
 pip install websockets
 pip install Flask
 pip install simple-websocket-server
-
-python setup.py install

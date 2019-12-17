@@ -56,8 +56,8 @@ class RTCData(EventEmitter):
         self.emit('connection', sender)
 
     async def __on_message(self, sender, msg):
-        # self.__wait_async(self.__rtcPeerCollection.sendMessageOther(sender.connectedId, msg))
         self.emit('message', sender, msg)
+        # self.__wait_async(self.__rtcPeerCollection.sendMessageOther(sender.connectedId, msg))
         # if msg == 'bye':
         #     await self.__disconnect_to_peer(sender.connectedId)
         # else:
@@ -75,6 +75,25 @@ class RTCData(EventEmitter):
     def __wait_async(self, coro):
         future = asyncio.run_coroutine_threadsafe(coro, self.__event_loop)
         return future.result()
+        # loop = None
+        # try:
+        #     loop = asyncio.get_running_loop()
+        # except RuntimeError:
+        #     loop = None
+        #
+        # if loop is None:
+        #     future = asyncio.run_coroutine_threadsafe(coro, self.__event_loop)
+        #     return future.result()
+        # else:
+        #     try:
+        #         print('!!!!!!')
+        #         if callback is None:
+        #             loop.create_task(coro)
+        #         else:
+        #             loop.create_task(coro).add_done_callback(callback)
+        #     except:
+        #         print('Error __wait_async')
+        #         pass
 
     async def __connect_signal_server(self):
         self.__signaling = create_ws_signaling(self.__signaling_host, self.__signaling_port)
@@ -97,7 +116,7 @@ class RTCData(EventEmitter):
                 if obj.toid == self.__peer_id:
                     print("recv sdp " + obj.type + " from " + obj.fromid)
 
-                    answer = await self.__rtcPeerCollection.setSignalMessage(obj)
+                    answer = await self.__rtcPeerCollection.set_signal_message(obj)
                     if isinstance(answer, RTCSessionDescriptionEx):
                         await self.__signaling.send(answer)
 
@@ -106,9 +125,9 @@ class RTCData(EventEmitter):
                     # future = asyncio.run_coroutine_threadsafe(
                     #   self.__rtcPeerCollection.setSignalMessage(obj), self.__event_loop)
                     # answer = future.result()
-            elif 'action' in obj:
-                self.message_handler(obj)
-                # self.__callback_event_emitter.emit('receive_message', obj)
+            # elif 'action' in obj:
+            #     self.message_handler(obj)
+            # self.__callback_event_emitter.emit('receive_message', obj)
             else:
                 print('unknown signaling')
 
@@ -131,43 +150,62 @@ class RTCData(EventEmitter):
     # asyncio.ensure_future(self.__consume_signaling())
     # self.__event_loop.run_until_complete(self.__consume_signaling())
 
-    def message_handler(self, message):
-        print('\nWebSocket message_handler...')
-        if message.get('to_peer_id') != self.id:
-            return
+    # def message_handler(self, message):
+    #     print('\nWebSocket message_handler...')
+    #     if message.get('to_peer_id') != self.id:
+    #         return
+    #
+    #     if message.get('action') == 'hello_peer':
+    #         received_message = message.get('message')
+    #         rtc_hp2p_client = Factory.instance().get_rtc_hp2p_client()
+    #
+    #         if 'ReqCode' in received_message:
+    #             req_code = received_message.get('ReqCode')
+    #             if req_code == MessageType.REQUEST_HELLO_PEER:
+    #                 rtc_hp2p_client.received_hello_peer(received_message)
+    #
+    #         elif 'RspCode' in received_message:
+    #             rsp_code = received_message.get('RspCode')
+    #             if rsp_code == MessageType.RESPONSE_HELLO_PEER:
+    #                 rtc_hp2p_client.received_response_hello_peer(True)
+    #
+    #     elif message.get('action') == 'failed_hello_peer':
+    #         print('received... failed_hello_peer', message)
+    #         rtc_hp2p_client = Factory.instance().get_rtc_hp2p_client()
+    #         rtc_hp2p_client.check_and_send_hello_peer()
 
-        if message.get('action') == 'failed_hello_peer':
-            print('received... failed_hello_peer', message)
-            rtc_hp2p_client = Factory.instance().get_rtc_hp2p_client()
-            rtc_hp2p_client.run_send_hello_peer()
-
-        elif message.get('action') == 'hello_peer':
-            received_message = message.get('message')
-            rtc_hp2p_client = Factory.instance().get_rtc_hp2p_client()
-
-            if 'ReqCode' in received_message:
-                req_code = received_message.get('ReqCode')
-                if req_code == MessageType.REQUEST_HELLO_PEER:
-                    rtc_hp2p_client.received_hello_peer(received_message)
-
-            elif 'RspCode' in received_message:
-                rsp_code = received_message.get('RspCode')
-                if rsp_code == MessageType.RESPONSE_HELLO_PEER:
-                    rtc_hp2p_client.received_response_hello_peer(True)
-
-    def send_to_server(self, message):
-        # self.__wait_async(self.__signaling.send(message))
-        self.__signaling.send(message)
+    # def async_send_to_server(self, message):
+    #     self.__wait_async(self.__signaling.send(message))
+    #     # self.__signaling.send(message)
 
     async def __connect_to_peer(self, toid, ticket_id):
-        # incoming
-        pc = self.__rtcPeerCollection.add_peer(toid, ticket_id, False, True)
+        # outgoing
+        pc = await self.__rtcPeerCollection.add_peer(toid, ticket_id, False, False)
         pc.createDataChannel()
         rsde = await pc.getSDP()
         await self.__signaling.send(rsde)
 
     async def __disconnect_to_peer(self, toid):
-        await self.__rtcPeerCollection.removePeer(toid)
+        await self.__rtcPeerCollection.remove_peer(toid)
+
+    async def connect_to_peer_async(self, toid, ticket_id):
+        await self.__connect_to_peer(toid, ticket_id)
+
+    async def disconnect_to_peer_async(self, toid):
+        await self.__disconnect_to_peer(toid)
+
+    async def send_async(self, to_peer_id, msg):
+        await self.__rtcPeerCollection.send_message(to_peer_id, msg)
+
+    async def send_broadcast_message_other_async(self, sender_id, msg):
+        await self.__rtcPeerCollection.broadcast_message_other(sender_id, msg)
+
+    async def send_broadcast_message_to_children_async(self, msg):
+        await self.__rtcPeerCollection.broadcast_message_to_children(msg)
+
+    def send_to_server(self, message):
+        self.__wait_async(self.__signaling.send(message))
+        # self.__signaling.send(message)
 
     def connect_to_peer(self, toid, ticket_id):
         self.__wait_async(self.__connect_to_peer(toid, ticket_id))
@@ -176,20 +214,18 @@ class RTCData(EventEmitter):
         self.__wait_async(self.__disconnect_to_peer(toid))
 
     def send(self, to_peer_id, msg):
-        # self.__wait_async(self.__rtcPeerCollection.sendMessage(to_peer_id, msg))
-        self.__rtcPeerCollection.sendMessage(to_peer_id, msg)
+        self.__wait_async(self.__rtcPeerCollection.send_message(to_peer_id, msg))
 
     def send_broadcast_message(self, msg):
-        # self.__wait_async(self.__rtcPeerCollection.broadcast_message(msg))
-        self.__rtcPeerCollection.broadcast_message(msg)
+        self.__wait_async(self.__rtcPeerCollection.broadcast_message(msg))
+        # self.__rtcPeerCollection.broadcast_message(msg)
 
     def send_broadcast_message_other(self, sender_id, msg):
-        # self.__wait_async(self.__rtcPeerCollection.broadcast_message_other(sender_id, msg))
-        self.__rtcPeerCollection.broadcast_message_other(sender_id, msg)
+        self.__wait_async(self.__rtcPeerCollection.broadcast_message_other(sender_id, msg))
 
     def send_broadcast_message_to_children(self, msg):
-        # self.__wait_async(self.__rtcPeerCollection.broadcast_message_to_children(msg))
-        self.__rtcPeerCollection.broadcast_message_to_children(msg)
+        self.__wait_async(self.__rtcPeerCollection.broadcast_message_to_children(msg))
+        # self.__rtcPeerCollection.broadcast_message_to_children(msg)
 
     def close(self):
         self.__close = True
