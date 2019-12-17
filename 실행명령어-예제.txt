@@ -1,0 +1,44 @@
+homp_server 실행
+__init__.py
+
+================
+
+tcp peer 실행
+채널 생성
+__init__.py -id=TCP-Creator -connection=tcp -owner=true -title="HP2P Overlay TCP"
+채널 생성, UI 사용
+__init__.py -id=Creator -connection=tcp -owner=true -title="HP2P Overlay" -gui-port=8091
+채널 생성, UI 사용, 미세먼지 사용
+__init__.py -id=Creator -connection=tcp -owner=true -title="HP2P Overlay" -gui-port=8091 -public-port=9001
+채널 생성, UI 사용, 미세먼지 사용, uPREP 연동
+__init__.py -id=Creator -connection=tcp -owner=true -title="HP2P Overlay" -gui-port=8091 -public-port=9001 -uprep-addr=127.0.0.1:30000
+
+채널 참가
+__init__.py -connection=tcp 
+채널 참가, UI 사용
+__init__.py -connection=tcp -gui-port=8092
+채널 참가, UI 사용, uPREP 연동
+__init__.py -connection=tcp -gui-port=8093 -uprep-addr=127.0.0.1:9071
+채널 참가, UI 사용,  미세먼지 사용, uPREP 연동
+__init__.py -connection=tcp -gui-port=8094 -public-port=9001 -uprep-addr=127.0.0.1:9071
+
+================
+
+WebRtc peer 실행
+채널 생성
+__init__.py -id=RTC-Creator -connection=rtc -owner=true -title="HP2P Overlay RTC"
+채널 생성, UI 사용
+__init__.py -id=Creator -connection=rtc -owner=true -title="HP2P Overlay" -gui-port=8091
+채널 생성, UI 사용, 미세먼지 사용
+__init__.py -id=Creator -connection=rtc -owner=true -title="HP2P Overlay" -gui-port=8091 -public-port=9001
+채널 생성, UI 사용, 미세먼지 사용, uPREP 연동
+__init__.py -id=Creator -connection=rtc -owner=true -title="HP2P Overlay" -gui-port=8091 -public-port=9001 -uprep-addr=127.0.0.1:30000
+
+채널 참가
+__init__.py -connection=rtc 
+채널 참가, UI 사용
+__init__.py -connection=rtc -gui-port=8092
+채널 참가, UI 사용, uPREP 연동
+__init__.py -connection=rtc -gui-port=8093 -uprep-addr=127.0.0.1:9071
+채널 참가, UI 사용,  미세먼지 사용, uPREP 연동
+__init__.py -connection=rtc -gui-port=8094 -public-port=9001 -uprep-addr=127.0.0.1:9071
