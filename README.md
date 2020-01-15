@@ -2,9 +2,17 @@
 
 ## HOMS
 
+### pre-requisite
+- mysql dbms (or maria db)
+
+### installation
+>$ cd homp_server
+
+>$ pip install -r requirements.txt
+
 ### usage
 
->$ python &#95;&#95;init&#95;&#95;.py
+>$ python homs_run.py
 
 ## HPEER
 
