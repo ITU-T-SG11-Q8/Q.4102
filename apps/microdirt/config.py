@@ -17,9 +17,9 @@ WEB_SOCKET_CONFIG = {
 # DB 환경 설정
 DATABASE_CONFIG = {
     'DB_HOST': 'localhost',  # DB 접속 Host
-    'DB_PORT': 3386,  # DB 접속 Port
+    'DB_PORT': 3306,  # DB 접속 Port
     'DB_USER': 'root',  # DB 사용자
-    'DB_PASS': 'root',  # DB 비밀번호
+    'DB_PASS': 'wkdtjqdl',  # DB 비밀번호
     'DB_DATABASE': 'hp2p'  # DB 이름
 }
 # 프로토콜 환경 설정
