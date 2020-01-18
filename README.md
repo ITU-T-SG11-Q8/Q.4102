@@ -64,15 +64,42 @@ $ python peer_run.py [parameters]
 ```
 
 ## Usage Examples
+
+### Overlay network creation
 * Creation of hybrid overlay network by an Owner
 ``` 
- $ python client.py -id=seeder -connection=tcp -owner=true
+ $ python hpeer_run.py -id=seeder -connection=tcp -owner=true
 ```
-
-* Participants of hybrid overlay network
-  - Join to latest channel (For easy testing)
+* TCP 채널 생성
 ```
- $ python client.py 
+ $ python hpeer_run.py -id=TCP-Creator -connection=tcp -owner=true -title="HP2P Overlay TCP"
+```
+* TCP 채널 생성 + Web UI
+```
+ $ python hpeer_run.py -id=Creator -connection=tcp -owner=true -title="HP2P Overlay" -gui-port=8091
+```
+* TCP 채널 생성 + Web UI + 외부 데이터 입력 포트 개방
+```
+ $ python hpeer_run.py  -id=Creator -connection=tcp -owner=true -title="HP2P Overlay" -gui-port=8091 -public-port=9001
+```
+* TCP 채널 생성 + Web UI + 외부 데이터 입력 포트 개방 + MP2P 연동
+```
+ $ python hpeer_run.py  -id=Creator -connection=tcp -owner=true -title="HP2P Overlay" -gui-port=8091 -public-port=9001 -uprep-addr=127.0.0.1:30000
+```
+### Participants of hybrid overlay network
+* TCP 채널 참가 (For easy testing)
+```
+ $ python client.py -connection=tcp 
  ```
-
-
+ * TCP 채널 참가 + Web UI (For easy testing)
+```
+ $ python client.py -connection=tcp -gui-port=8092
+ ```
+ * TCP 채널 참가 + Web UI + MP2P 연동 (For easy testing)
+```
+ $ python client.py -connection=tcp -gui-port=8093 -uprep-addr=127.0.0.1:9071
+ ```
+ * TCP 채널 참가 + Web UI + 외부데이터 연동 + MP2P 연동 (For easy testing)
+```
+ $ python client.py -connection=tcp -gui-port=8094 -public-port=9001 -uprep-addr=127.0.0.1:9071
+ ```
