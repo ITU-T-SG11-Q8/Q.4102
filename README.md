@@ -45,7 +45,7 @@ $ python homs_run.py
 ```
 $ cd network/hp2p/hpeer
 $ python peer_run.py [parameters]
-```
+
 
 * mandatory
   - connection=[tcp, rtc]   => 연결 방식를 설정한다. (필수 항목)
@@ -60,6 +60,8 @@ $ python peer_run.py [parameters]
    - admin-key=[admin_key]   => 채널 Admin Key 을/를 설정한다. (Optional , 자동 생성)
    - auth-type=[open, closed]   => 채널 Auth Type 을/를 설정한다. (Optional , Default=open)
    - access-key=[access_key]   => 채널 Access Key 을/를 설정한다. (Optional , Default=etri), 채널의 Auth Type 이 closed 일 경우에만 유효함. 채널 생성 및 참가 시 사용
+
+```
 
 ## Usage Examples
 * Creation of hybrid overlay network by an Owner
