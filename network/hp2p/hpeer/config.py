@@ -7,7 +7,8 @@ GUI_CONFIG = {
 # PEER 통신 환경 설정
 CLIENT_CONFIG = {
     'TCP_SERVER_IP': '127.0.0.1',  # (TCP 사용시) TCP 서버 IP
-    'HOMS_URL': 'http://localhost:8081',  # HOMS 서버 URL
+    #'HOMS_URL': 'http://localhost:8081',  # HOMS 서버 URL
+    'HOMS_URL': 'http://192.168.100.166:9081',  # HOMS 서버 URL
     'WEB_SOCKET_SERVER_IP': '127.0.0.1',  # (WebRTC 사용시) 릴레이 웹소켓 서버 IP
     'WEB_SOCKET_SERVER_PORT': 8082  # (WebRTC 사용시) 릴레이 웹소켓 서버 Port
 }

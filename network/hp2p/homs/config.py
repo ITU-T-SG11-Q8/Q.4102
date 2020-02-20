@@ -1,7 +1,7 @@
 # 서버 환경 설정
 SERVER_CONFIG = {
     'HOST': '0.0.0.0',  # 서버 IP
-    'PORT': 8081,  # 서버 Port
+    'PORT': 9081,  # 서버 Port
     'DEBUG': False,
     'WEB_ROOT': 'static',
     'CLEAR_DATABASE': False,  # 서버 실행시 Database 초기화 여부
