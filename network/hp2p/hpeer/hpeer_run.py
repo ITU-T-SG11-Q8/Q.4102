@@ -7,7 +7,7 @@ import socket
 from flask import Flask, Response
 
 from public_data.public_data_listener import PublicDataListener
-from config import GUI_CONFIG
+from config import GUI_CONFIG, CLIENT_CONFIG
 from data.factory import Factory, Peer
 from tcp.tcp_hp2p_client import TcpHp2pClient
 from rtc.rtc_hp2p_client import RtcHp2pClient
@@ -199,6 +199,10 @@ if __name__ == '__main__':
                 peer.auth_access_key = arg_results.access_key
         else:
             peer.overlay_id = arg_results.overlay_id
+
+        client_ip = CLIENT_CONFIG['TCP_SERVER_IP']
+        if client_ip == '0.0.0.0' or client_ip == '127.0.0.1' or client_ip == 'localhost':
+            CLIENT_CONFIG['TCP_SERVER_IP'] = socket.gethostbyname(socket.getfqdn())
 
         scheduler = ClientScheduler()
         scheduler.start()
