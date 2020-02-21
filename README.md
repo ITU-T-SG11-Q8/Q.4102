@@ -89,17 +89,17 @@ $ python peer_run.py [parameters]
 ### Participants of hybrid overlay network
 * TCP 채널 참가 (For easy testing)
 ```
- $ python client.py -connection=tcp 
+ $ python hpeer_run.py -connection=tcp 
  ```
  * TCP 채널 참가 + Web UI (For easy testing)
 ```
- $ python client.py -connection=tcp -gui-port=8092
+ $ python hpeer_run.py -connection=tcp -gui-port=8092
  ```
  * TCP 채널 참가 + Web UI + MP2P 연동 (For easy testing)
 ```
- $ python client.py -connection=tcp -gui-port=8093 -uprep-addr=127.0.0.1:9071
+ $ python hpeer_run.py -connection=tcp -gui-port=8093 -uprep-addr=127.0.0.1:9071
  ```
  * TCP 채널 참가 + Web UI + 외부데이터 연동 + MP2P 연동 (For easy testing)
 ```
- $ python client.py -connection=tcp -gui-port=8094 -public-port=9001 -uprep-addr=127.0.0.1:9071
+ $ python hpeer_run.py -connection=tcp -gui-port=8094 -public-port=9001 -uprep-addr=127.0.0.1:9071
  ```
