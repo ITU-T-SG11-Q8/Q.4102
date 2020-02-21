@@ -1,4 +1,12 @@
 # UI 웹서버 환경 설정
+import socket
+def getlocalip(): 
+    local_ip = [l for l in ([ip for ip in socket.gethostbyname_ex(socket.gethostname())[2]
+                if not ip.startswith("127.")][:1], [[(s.connect(('8.8.8.8', 53)),
+                s.getsockname()[0], s.close())
+                for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]]) if l][0][0]
+    return local_ip
+
 GUI_CONFIG = {
     'HOST': '0.0.0.0',  # 서버 IP
     'WEB_SOCKET_HOST': '0.0.0.0',  # 웹소켓 서버 IP
@@ -7,6 +15,7 @@ GUI_CONFIG = {
 # PEER 통신 환경 설정
 CLIENT_CONFIG = {
     'TCP_SERVER_IP': '127.0.0.1',  # (TCP 사용시) TCP 서버 IP
+    'TCP_SERVER_IP': getlocalip(),
     #'HOMS_URL': 'http://localhost:8081',  # HOMS 서버 URL
     'HOMS_URL': 'http://192.168.100.166:9081',  # HOMS 서버 URL
     'WEB_SOCKET_SERVER_IP': '127.0.0.1',  # (WebRTC 사용시) 릴레이 웹소켓 서버 IP
@@ -39,3 +48,4 @@ PEER_CONFIG = {
     'PRINT_SCAN_TREE_LOG': False,  # ScanTree 확인 및 복구 Log 메시지 출력 여부
     'PRINT_UPREP_LOG': False  # uPREP Log 메시지 출력 여부
 }
+
