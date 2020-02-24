@@ -1,0 +1,12 @@
+# requirements.txt 생성
+# pip freeze > requirements.txt
+# requirements.txt 설치
+# pip install -r requirements.txt
+
+pip install Flask
+pip install flask-restful
+pip install PyMySQL
+pip install schedule
+pip install websockets
+pip install simple-websocket-server
+pip install requests

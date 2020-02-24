@@ -1,0 +1,10 @@
+version: '2'
+services:
+  homs:
+    image: homs:1.0
+    ports: 
+      - "9000:9000"
+      - "9100:9100"
+    command: bash -c "service mysql start && python3.7 /homs/homs_run.py -port=9000 -ws-port=9100"
+    container_name: homs
+    tty: true

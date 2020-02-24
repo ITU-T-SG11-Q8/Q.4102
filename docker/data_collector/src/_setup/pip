@@ -1,0 +1,8 @@
+# requirements.txt 생성
+# pip freeze > requirements.txt
+# requirements.txt 설치
+# pip install -r requirements.txt
+
+pip install requests
+pip install schedule
+pip install pymysql

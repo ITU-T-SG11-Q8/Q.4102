@@ -1,0 +1,5 @@
+#!/bin/bash
+
+docker rmi homs:1.0
+
+docker build -f Dockerfile --tag homs:1.0 .
