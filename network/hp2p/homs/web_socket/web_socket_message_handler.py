@@ -1,24 +1,18 @@
 import json
 
+from config import LOG_CONFIG
 from classes.overlay import Overlay
 from classes.peer import Peer
 
 
 class WebSocketMessageHandler:
     def __init__(self):
-        self._web_socket_server = None
         self._web_socket_peer_dict = {}
         self._web_socket_client_list = []
 
-    def get_web_socket_server(self):
-        return self._web_socket_server
-
-    def set_web_socket_server(self, server):
-        self._web_socket_server = server
-
     def add_web_socket_peer(self, peer_id, client):
         if client not in self._web_socket_peer_dict:
-            print('add peer', peer_id)
+            print('[WebSocketMessageSender] Add Peer =>', peer_id)
             self._web_socket_peer_dict[peer_id] = client
 
     def delete_web_socket_peer(self, client):
@@ -30,10 +24,10 @@ class WebSocketMessageHandler:
                 break
 
         if remove_peer_id is not None:
-            print('remove peer =>', remove_peer_id)
+            print('[WebSocketMessageSender] Remove Peer =>', remove_peer_id)
             del self._web_socket_peer_dict[remove_peer_id]
 
-    def send_message_to_peer(self, peer_id, message) -> bool:
+    def send_message_to_peer(self, peer_id, message):
         if peer_id in self._web_socket_peer_dict:
             connection = self._web_socket_peer_dict[peer_id]
             connection.send_message(json.dumps(message))
@@ -43,12 +37,12 @@ class WebSocketMessageHandler:
 
     def append_web_socket_client(self, client):
         if client not in self._web_socket_client_list:
-            print('append client')
+            print('[WebSocketMessageSender] Append Client =>', client.address)
             self._web_socket_client_list.append(client)
 
     def remove_web_socket_client(self, client):
         if client in self._web_socket_client_list:
-            print('remove client')
+            print('[WebSocketMessageSender] Remove Client =>', client.address)
             self._web_socket_client_list.remove(client)
 
     def send_message_to_client(self, message):
@@ -77,9 +71,10 @@ class WebSocketMessageHandler:
             self.send_message_to_client(message)
 
     def send_log_message(self, overlay_id, peer_id, messsage):
-        message = self.create_log_message(overlay_id, peer_id, messsage)
-        if message is not None:
-            self.send_message_to_client(message)
+        if LOG_CONFIG['PRINT_PROTOCOL_LOG']:
+            message = self.create_log_message(overlay_id, peer_id, messsage)
+            if message is not None:
+                self.send_message_to_client(message)
 
     @classmethod
     def create_overlay_cost_map_message(cls, overlay: Overlay):

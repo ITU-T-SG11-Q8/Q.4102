@@ -1,7 +1,18 @@
-from classes.singleton_instance import SingletonInstance
+class SingletonInstance:
+    _instance = None
+
+    @classmethod
+    def _get_instance(cls):
+        return cls._instance
+
+    @classmethod
+    def get(cls, *args, **kargs):
+        cls._instance = cls(*args, **kargs)
+        cls.get = cls._get_instance
+        return cls._instance
 
 
-class Service(SingletonInstance):
+class Factory(SingletonInstance):
     def __init__(self):
         self._overlay_dict = {}
         self._web_socket_message_handler = None
@@ -18,8 +29,8 @@ class Service(SingletonInstance):
     def delete_overlay(self, key: str):
         del self._overlay_dict[key]
 
-    def get_web_socket_handler(self):
+    def get_web_socket_message_handler(self):
         return self._web_socket_message_handler
 
-    def set_web_socket_handler(self, handler):
+    def set_web_socket_message_handler(self, handler):
         self._web_socket_message_handler = handler

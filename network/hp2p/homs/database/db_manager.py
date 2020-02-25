@@ -3,9 +3,9 @@ import json
 from datetime import datetime
 
 from config import DATABASE_CONFIG
-from service.service import Service
 from classes.overlay import Overlay
 from classes.peer import Peer
+from data.factory import Factory
 
 
 class DBManager:
@@ -19,23 +19,20 @@ class DBManager:
     def __del__(self):
         self.connect.close()
 
-    # DB Check
+    # DB Check & Create
     def init(self):
         try:
-            is_execute = False
-            self.cursor.execute("show databases like %s", (self.database_name,))
+            self.cursor.execute("SHOW DATABASES LIKE %s", (self.database_name,))
             database = self.cursor.fetchone()
             if database is None:
-                is_execute = True
                 self.cursor.execute("CREATE DATABASE IF NOT EXISTS {0}".format(self.database_name))
-                print("[DBManager] CREATE DATABASE...", flush=True)
+                print("[DBManager] CREATE DATABASE ", self.database_name)
 
             self.cursor.execute("USE {0}".format(self.database_name))
 
-            self.cursor.execute("show tables like 'hp2p_overlay'")
+            self.cursor.execute("SHOW TABLES LIKE 'hp2p_overlay'")
             hp2p_overlay = self.cursor.fetchone()
             if hp2p_overlay is None:
-                is_execute = True
                 self.cursor.execute("CREATE TABLE IF NOT EXISTS hp2p_overlay ( "
                                     "overlay_id varchar(50) COLLATE utf8_unicode_ci NOT NULL, "
                                     "title varchar(100) COLLATE utf8_unicode_ci NOT NULL, "
@@ -55,12 +52,11 @@ class DBManager:
                                     "updated_at datetime NOT NULL,  "
                                     " PRIMARY KEY (`overlay_id`)"
                                     ")")
-                print("[DBManager] CREATE TABLE hp2p_overlay", flush=True)
+                print("[DBManager] CREATE TABLE hp2p_overlay")
 
-            self.cursor.execute("show tables like 'hp2p_peer'")
+            self.cursor.execute("SHOW TABLES LIKE 'hp2p_peer'")
             hp2p_peer = self.cursor.fetchone()
             if hp2p_peer is None:
-                is_execute = True
                 self.cursor.execute("CREATE TABLE IF NOT EXISTS hp2p_peer ( "
                                     "peer_id varchar(50) COLLATE utf8_unicode_ci NOT NULL, "
                                     "overlay_id varchar(50) COLLATE utf8_unicode_ci NOT NULL,  "
@@ -79,22 +75,20 @@ class DBManager:
                                     "report_time datetime DEFAULT NULL, "
                                     " PRIMARY KEY (peer_id, overlay_id)"
                                     ")")
-                print("[DBManager] CREATE TABLE hp2p_peer", flush=True)
+                print("[DBManager] CREATE TABLE hp2p_peer")
 
-            self.cursor.execute("show tables like 'hp2p_auth_peer'")
+            self.cursor.execute("SHOW TABLES LIKE 'hp2p_auth_peer'")
             hp2p_auth_peer = self.cursor.fetchone()
             if hp2p_auth_peer is None:
-                is_execute = True
                 self.cursor.execute("CREATE TABLE IF NOT EXISTS hp2p_auth_peer ( "
                                     "overlay_id varchar(50) COLLATE utf8_unicode_ci NOT NULL, "
                                     "peer_id varchar(50) COLLATE utf8_unicode_ci NOT NULL, "
                                     "updated_at datetime DEFAULT NULL, "
                                     "PRIMARY KEY (overlay_id, peer_id)"
                                     ")")
-                print("[DBManager] CREATE TABLE hp2p_auth_peer", flush=True)
+                print("[DBManager] CREATE TABLE hp2p_auth_peer")
 
-            if is_execute:
-                self.connect.commit()
+            self.connect.commit()
         except Exception as e:
             print(e)
             self.connect.rollback()
@@ -104,18 +98,19 @@ class DBManager:
 
     # DB Clear
     def clear_database(self):
-        print("[CLEAR_DATABASE] CALL...", flush=True)
+        print("[DBManager] CLEAR_DATABASE")
         try:
             self.cursor.execute("DELETE FROM hp2p_auth_peer")
             self.cursor.execute("DELETE FROM hp2p_peer")
             self.cursor.execute("DELETE FROM hp2p_overlay")
             self.connect.commit()
-        except:
+        except Exception as e:
             self.connect.rollback()
+            print(e)
 
     # DB Select & Create Overlay Map
     def create_overlay_map(self):
-        print("[CREATE_OVERLAY_MAP] CALL...", flush=True)
+        print("[DBManager] CREATE_OVERLAY_MAP")
         self.cursor.execute("SELECT * FROM hp2p_overlay")
         select_overlay_list = self.cursor.fetchall()
 
@@ -145,36 +140,4 @@ class DBManager:
                     peer.costmap = json.loads(select_peer.get('costmap'))
                 overlay.add_peer(peer_id, peer)
 
-            Service.get().set_overlay(overlay_id, overlay)
-
-    # DB Check(공공 데이터)
-    def init_public_data(self):
-        try:
-            is_execute = False
-            self.cursor.execute("show databases like %s", (self.database_name,))
-            database = self.cursor.fetchone()
-            if database is None:
-                is_execute = True
-                self.cursor.execute("CREATE DATABASE IF NOT EXISTS {0}".format(self.database_name))
-                print("[DBManager] CREATE DATABASE...", flush=True)
-
-            self.cursor.execute("USE {0}".format(self.database_name))
-
-            self.cursor.execute("show tables like 'public_data'")
-            hp2p_overlay = self.cursor.fetchone()
-            if hp2p_overlay is None:
-                is_execute = True
-                self.cursor.execute("CREATE TABLE IF NOT EXISTS public_data ( "
-                                    "data_time DATETIME NOT NULL, "
-                                    "pm10_data LONGTEXT NOT NULL COLLATE utf8_unicode_ci, "
-                                    "updated_at DATETIME NOT NULL,  "
-                                    " PRIMARY KEY (`data_time`)"
-                                    ")")
-                print("[DBManager] CREATE TABLE public_data", flush=True)
-
-            if is_execute:
-                self.connect.commit()
-        except Exception as e:
-            print(e)
-            self.connect.rollback()
-            return False
+            Factory.get().set_overlay(overlay_id, overlay)

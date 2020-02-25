@@ -1,18 +1,18 @@
 import uuid
 from datetime import datetime
-
 from flask import request
 from flask_restful import Resource
 
-from config import HOMS_CONFIG, WEB_SOCKET_CONFIG
-from service.service import Service
+from config import HOMS_CONFIG, WEB_SOCKET_CONFIG, LOG_CONFIG
 from classes.overlay import Overlay
+from data.factory import Factory
 from database.db_connector import DBConnector
 
 
 class HybridOverlayCreation(Resource):
     def post(self):
-        print("[SERVER] Call HybridOverlayCreation", flush=True)
+        if LOG_CONFIG['PRINT_PROTOCOL_LOG']:
+            print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         db_connector = DBConnector()
         try:
             request_data = request.get_json()
@@ -96,9 +96,9 @@ class HybridOverlayCreation(Resource):
             if expires > 0:
                 new_overlay.update_time = datetime.now()
 
-            Service.get().set_overlay(overlay_id, new_overlay)
-            Service.get().get_web_socket_handler().send_create_overlay_message(overlay_id)
-            Service.get().get_web_socket_handler().send_log_message(overlay_id, owner_id, "Overlay Creation.")
+            Factory.get().set_overlay(overlay_id, new_overlay)
+            Factory.get().get_web_socket_message_handler().send_create_overlay_message(overlay_id)
+            Factory.get().get_web_socket_message_handler().send_log_message(overlay_id, owner_id, "Overlay Creation.")
 
             db_connector.commit()
             return result, 200
@@ -112,7 +112,8 @@ class HybridOverlayCreation(Resource):
 
 class HybridOverlayQuery(Resource):
     def get(self):
-        print("[SERVER] Call HybridOverlayQuery", flush=True)
+        if LOG_CONFIG['PRINT_PROTOCOL_LOG']:
+            print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         db_connector = DBConnector()
         try:
             query = "SELECT " \
@@ -120,7 +121,7 @@ class HybridOverlayQuery(Resource):
                     "FROM hp2p_overlay"
             where = None
             parameters = None
-            orderby = " ORDER BY created_at"
+            order_by = " ORDER BY created_at"
             result = []
 
             if len(request.args) > 0:
@@ -135,9 +136,9 @@ class HybridOverlayQuery(Resource):
                     parameters = ('%%%s%%' % request.args.get('description'))
 
             if parameters is None or where is None:
-                select_overlay_list = db_connector.select(query + orderby)
+                select_overlay_list = db_connector.select(query + order_by)
             else:
-                query = query + where + orderby
+                query = query + where + order_by
                 select_overlay_list = db_connector.select(query, (parameters,))
 
             if len(select_overlay_list) > 0:
@@ -173,7 +174,8 @@ class HybridOverlayQuery(Resource):
 
 class HybridOverlayModification(Resource):
     def put(self):
-        print("[SERVER] Call HybridOverlayModification", flush=True)
+        if LOG_CONFIG['PRINT_PROTOCOL_LOG']:
+            print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         db_connector = DBConnector()
         try:
             request_data = request.get_json()
@@ -268,14 +270,15 @@ class HybridOverlayModification(Resource):
             if description is None:
                 del result['description']
 
-            get_overlay: Overlay = Service.get().get_overlay(overlay_id)
+            get_overlay: Overlay = Factory.get().get_overlay(overlay_id)
             if expires is not None:
                 get_overlay.expires = expires
 
             if get_overlay.expires > 0:
                 get_overlay.update_time = datetime.now()
 
-            Service.get().get_web_socket_handler().send_log_message(overlay_id, owner_id, "Overlay Modification.")
+            Factory.get().get_web_socket_message_handler().send_log_message(overlay_id, owner_id,
+                                                                            "Overlay Modification.")
             db_connector.commit()
             return result, 200
         except ValueError:
@@ -288,7 +291,8 @@ class HybridOverlayModification(Resource):
 
 class HybridOverlayRemoval(Resource):
     def delete(self):
-        print("[SERVER] Call HybridOverlayRemoval", flush=True)
+        if LOG_CONFIG['PRINT_PROTOCOL_LOG']:
+            print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         db_connector = DBConnector()
         try:
             request_data = request.get_json()
@@ -313,9 +317,9 @@ class HybridOverlayRemoval(Resource):
             db_connector.delete("DELETE FROM hp2p_peer WHERE overlay_id = %s", (overlay_id,))
             db_connector.delete("DELETE FROM hp2p_overlay WHERE overlay_id = %s", (overlay_id,))
 
-            Service.get().delete_overlay(overlay_id)
-            Service.get().get_web_socket_handler().send_remove_overlay_message(overlay_id)
-            Service.get().get_web_socket_handler().send_log_message(overlay_id, owner_id, "Overlay Removal.")
+            Factory.get().delete_overlay(overlay_id)
+            Factory.get().get_web_socket_message_handler().send_remove_overlay_message(overlay_id)
+            Factory.get().get_web_socket_message_handler().send_log_message(overlay_id, owner_id, "Overlay Removal.")
 
             result = {
                 'overlay_id': overlay_id
@@ -332,7 +336,7 @@ class HybridOverlayRemoval(Resource):
 
 class ApiHybridOverlayRemoval(Resource):
     def post(self):
-        print("[SERVER] API Call HybridOverlayRemoval", flush=True)
+        print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         db_connector = DBConnector()
         try:
             request_data = request.get_json()
@@ -354,9 +358,10 @@ class ApiHybridOverlayRemoval(Resource):
             db_connector.delete("DELETE FROM hp2p_peer WHERE overlay_id = %s", (overlay_id,))
             db_connector.delete("DELETE FROM hp2p_overlay WHERE overlay_id = %s", (overlay_id,))
 
-            Service.get().delete_overlay(overlay_id)
-            Service.get().get_web_socket_handler().send_remove_overlay_message(overlay_id)
-            Service.get().get_web_socket_handler().send_log_message(overlay_id, "Administrator", "Overlay Removal.")
+            Factory.get().delete_overlay(overlay_id)
+            Factory.get().get_web_socket_message_handler().send_remove_overlay_message(overlay_id)
+            Factory.get().get_web_socket_message_handler().send_log_message(overlay_id, "Administrator",
+                                                                            "Overlay Removal.")
 
             result = {
                 'overlay_id': overlay_id
@@ -373,6 +378,7 @@ class ApiHybridOverlayRemoval(Resource):
 
 class GetInitData(Resource):
     def get(self):
+        print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         result = {
             'WEB_SOCKET_PORT': WEB_SOCKET_CONFIG['PORT']
         }
@@ -381,15 +387,10 @@ class GetInitData(Resource):
 
 class GetOverlayCostMap(Resource):
     def get(self):
+        print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         if len(request.args) > 0 and 'overlay_id' in request.args:
-            overlay = Service.get().get_overlay(request.args.get('overlay_id'))
-            message = Service.get().get_web_socket_handler().create_overlay_cost_map_message(overlay)
+            overlay = Factory.get().get_overlay(request.args.get('overlay_id'))
+            message = Factory.get().get_web_socket_message_handler().create_overlay_cost_map_message(overlay)
             return message, 200
         else:
             return None, 404
-# select_peers_info_query = "SELECT peer_id,address FROM " \
-#                           "(SELECT peer_id , overlay_id , peer_index, address, " \
-#                           "(max_capa - num_primary - num_out_candidate - num_in_candidate) " \
-#                           "as capa FROM hp2p_peer WHERE overlay_id = %s) AS t_capa " \
-#                           "WHERE capa > 0 ORDER BY capa DESC , peer_index ASC LIMIT 5"
-# peer_info_list = db_connector.select(select_peers_info_query, (overlay_id,))

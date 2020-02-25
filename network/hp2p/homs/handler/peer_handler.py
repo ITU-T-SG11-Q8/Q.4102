@@ -1,20 +1,20 @@
 import json
 import math
 from datetime import datetime
-
 from flask import request
 from flask_restful import Resource
 
-from config import HOMS_CONFIG
-from service.service import Service
-from database.db_connector import DBConnector
+from config import HOMS_CONFIG, LOG_CONFIG
 from classes.overlay import Overlay
 from classes.peer import Peer
+from data.factory import Factory
+from database.db_connector import DBConnector
 
 
 class HybridOverlayJoin(Resource):
     def post(self):
-        print("[SERVER] Call HybridOverlayJoin", flush=True)
+        if LOG_CONFIG['PRINT_PROTOCOL_LOG']:
+            print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         db_connector = DBConnector()
         try:
             request_data = request.get_json()
@@ -63,13 +63,12 @@ class HybridOverlayJoin(Resource):
                 if not is_auth_peer:
                     return {'overlay_id': overlay_id}, 407
 
-            get_overlay: Overlay = Service.get().get_overlay(overlay_id)
+            get_overlay: Overlay = Factory.get().get_overlay(overlay_id)
 
             if get_overlay is None:
                 raise ValueError
 
             status_code = 202 if sub_type == 'tree' else 200
-            peer_info_list = []
             peer_info_list_count = HOMS_CONFIG["PEER_INFO_LIST_COUNT"] if "PEER_INFO_LIST_COUNT" in HOMS_CONFIG else 3
 
             if recovery:
@@ -84,7 +83,7 @@ class HybridOverlayJoin(Resource):
                 if ticket_id is None or get_peer is None:
                     raise ValueError
 
-                pos = HOMS_CONFIG["RECOVERY_ENTRYPOINT_POS"] if "RECOVERY_ENTRYPOINT_POS" in HOMS_CONFIG else 20
+                pos = HOMS_CONFIG["RECOVERY_ENTRY_POINT_POS"] if "RECOVERY_ENTRY_POINT_POS" in HOMS_CONFIG else 20
 
                 rank_pos = math.floor(get_overlay.get_primary_peer_len() * (pos / 100))
                 rank_pos = max(rank_pos, 1)
@@ -99,9 +98,8 @@ class HybridOverlayJoin(Resource):
                 peer_info_list = db_connector.select(select_peers_recovery_query,
                                                      (overlay_id, rank_pos, ticket_id, peer_info_list_count))
             else:
-                pos = 80
                 size = get_overlay.get_primary_peer_len()
-                pos_dict = HOMS_CONFIG["INITIAL_ENTRYPOINT_POS"]
+                pos_dict = HOMS_CONFIG["INITIAL_ENTRY_POINT_POS"]
                 find_value = 0
                 for pos_value in sorted(pos_dict.keys()):
                     if find_value == 0:
@@ -113,7 +111,6 @@ class HybridOverlayJoin(Resource):
                         break
                 pos = pos_dict[find_value]
 
-                # pos = HOMS_CONFIG["INITIAL_ENTRYPOINT_POS"] if "INITIAL_ENTRYPOINT_POS" in HOMS_CONFIG else 80
                 rank_pos = math.floor(size * (pos / 100))
                 select_peers_query = "SELECT v_p_t.peer_id, v_p_t.address FROM " \
                                      " (SELECT p_t.*,@rownum := @rownum + 1 AS rank FROM " \
@@ -169,10 +166,11 @@ class HybridOverlayJoin(Resource):
                 del result['ticket_id']
 
             if not recovery:
-                Service.get().get_web_socket_handler().send_add_peer_message(overlay_id, peer_id, ticket_id)
-                Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, "Overlay Join.")
+                Factory.get().get_web_socket_message_handler().send_add_peer_message(overlay_id, peer_id, ticket_id)
+                Factory.get().get_web_socket_message_handler().send_log_message(overlay_id, peer_id, "Overlay Join.")
             else:
-                Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, "Overlay Recovery.")
+                Factory.get().get_web_socket_message_handler().send_log_message(overlay_id, peer_id,
+                                                                                "Overlay Recovery.")
 
             db_connector.commit()
             return result, status_code
@@ -186,7 +184,8 @@ class HybridOverlayJoin(Resource):
 
 class HybridOverlayReport(Resource):
     def put(self):
-        print("[SERVER] Call HybridOverlayReport", flush=True)
+        if LOG_CONFIG['PRINT_PROTOCOL_LOG']:
+            print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         db_connector = DBConnector()
         try:
             request_data = request.get_json()
@@ -222,7 +221,7 @@ class HybridOverlayReport(Resource):
             if select_peer is None:
                 raise ValueError
 
-            get_overlay: Overlay = Service.get().get_overlay(overlay_id)
+            get_overlay: Overlay = Factory.get().get_overlay(overlay_id)
             if get_overlay is None:
                 raise ValueError
 
@@ -237,7 +236,7 @@ class HybridOverlayReport(Resource):
                 get_peer.costmap = costmap
                 get_peer.update_time = datetime.now()
 
-                Service.get().get_web_socket_handler().send_update_peer_message(overlay_id, costmap)
+                Factory.get().get_web_socket_message_handler().send_update_peer_message(overlay_id, costmap)
 
                 update_peer_query = "UPDATE hp2p_peer SET " \
                                     "num_primary = %s, num_out_candidate = %s, " \
@@ -252,7 +251,7 @@ class HybridOverlayReport(Resource):
             }
 
             costmap_message = "Overlay Report. " + json.dumps(costmap)
-            Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, costmap_message)
+            Factory.get().get_web_socket_message_handler().send_log_message(overlay_id, peer_id, costmap_message)
 
             db_connector.commit()
             return result, 200
@@ -266,7 +265,8 @@ class HybridOverlayReport(Resource):
 
 class HybridOverlayRefresh(Resource):
     def put(self):
-        print("[SERVER] Call HybridOverlayRefresh", flush=True)
+        if LOG_CONFIG['PRINT_PROTOCOL_LOG']:
+            print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         db_connector = DBConnector()
         try:
             request_data = request.get_json()
@@ -292,7 +292,7 @@ class HybridOverlayRefresh(Resource):
             if select_peer is None:
                 raise ValueError
 
-            get_overlay: Overlay = Service.get().get_overlay(overlay_id)
+            get_overlay: Overlay = Factory.get().get_overlay(overlay_id)
             if get_overlay is None:
                 raise ValueError
 
@@ -354,7 +354,8 @@ class HybridOverlayRefresh(Resource):
 
 class HybridOverlayLeave(Resource):
     def delete(self):
-        print("[SERVER] Call HybridOverlayLeave", flush=True)
+        if LOG_CONFIG['PRINT_PROTOCOL_LOG']:
+            print("[SERVER] {0} / {1}".format(self.methods, self.endpoint))
         db_connector = DBConnector()
         try:
             request_data = request.get_json()
@@ -390,7 +391,7 @@ class HybridOverlayLeave(Resource):
 
             db_connector.delete("DELETE FROM hp2p_peer WHERE peer_id = %s AND overlay_id = %s", (peer_id, overlay_id))
 
-            get_overlay: Overlay = Service.get().get_overlay(overlay_id)
+            get_overlay: Overlay = Factory.get().get_overlay(overlay_id)
             if get_overlay is None:
                 raise ValueError
 
@@ -403,18 +404,18 @@ class HybridOverlayLeave(Resource):
                 'overlay_id': overlay_id,
             }
 
-            Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, "Overlay Leave.")
+            Factory.get().get_web_socket_message_handler().send_log_message(overlay_id, peer_id, "Overlay Leave.")
 
             if get_overlay.get_peer_dict_len() < 1:
                 db_connector.delete("DELETE FROM hp2p_auth_peer WHERE overlay_id = %s", (overlay_id,))
                 db_connector.delete("DELETE FROM hp2p_peer WHERE overlay_id = %s", (overlay_id,))
                 db_connector.delete("DELETE FROM hp2p_overlay WHERE overlay_id = %s", (overlay_id,))
 
-                Service.get().delete_overlay(overlay_id)
-                Service.get().get_web_socket_handler().send_remove_overlay_message(overlay_id)
-                Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, "Overlay Removal.")
+                Factory.get().delete_overlay(overlay_id)
+                Factory.get().get_web_socket_message_handler().send_remove_overlay_message(overlay_id)
+                Factory.get().get_web_socket_message_handler().send_log_message(overlay_id, peer_id, "Overlay Removal.")
             else:
-                Service.get().get_web_socket_handler().send_delete_peer_message(overlay_id, peer_id)
+                Factory.get().get_web_socket_message_handler().send_delete_peer_message(overlay_id, peer_id)
 
             db_connector.commit()
             return result, 200

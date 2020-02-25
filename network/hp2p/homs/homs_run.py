@@ -1,24 +1,21 @@
-import sys
 import os.path
 import atexit
-
 from flask import Flask, Response
 from flask_restful import Api
+import argparse
 
-from config import SERVER_CONFIG
-from service.service import Service
-from database.db_connector import DBConnector
+from config import SERVER_CONFIG, WEB_SOCKET_CONFIG
+from data.server_scheduler import ServerScheduler
 from database.db_manager import DBManager
 from handler.overlay_handler import HybridOverlayCreation, HybridOverlayModification, HybridOverlayQuery, \
     HybridOverlayRemoval, ApiHybridOverlayRemoval, GetInitData, GetOverlayCostMap
 from handler.peer_handler import HybridOverlayJoin, HybridOverlayLeave, HybridOverlayRefresh, HybridOverlayReport
 from web_socket.web_socket_server import Hp2pWebSocketServer
-from expires_scheduler import ExpiresScheduler
 
-# Set Flask Api
 app = Flask(__name__)
 app.static_folder = SERVER_CONFIG['WEB_ROOT']
 api = Api(app)
+scheduler = None
 
 
 @app.route('/')
@@ -67,35 +64,6 @@ def get_file(filename, is_encoding=False):
         return str(exc)
 
 
-def remove_expires_peer_callback(overlay_id, peer_id):
-    db_connector = DBConnector()
-    try:
-        db_connector.delete("DELETE FROM hp2p_peer WHERE peer_id = %s AND overlay_id = %s", (peer_id, overlay_id))
-        Service.get().get_overlay(overlay_id).delete_peer(peer_id)
-        Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, "Overlay Leave.")
-        print("\n[ExpiresScheduler] Remove Peer...", overlay_id, peer_id)
-
-        get_overlay = Service.get().get_overlay(overlay_id)
-        if get_overlay.get_peer_dict_len() < 1:
-            db_connector.delete("DELETE FROM hp2p_auth_peer WHERE overlay_id = %s", (overlay_id,))
-            db_connector.delete("DELETE FROM hp2p_peer WHERE overlay_id = %s", (overlay_id,))
-            db_connector.delete("DELETE FROM hp2p_overlay WHERE overlay_id = %s", (overlay_id,))
-
-            Service.get().delete_overlay(overlay_id)
-            Service.get().get_web_socket_handler().send_remove_overlay_message(overlay_id)
-            Service.get().get_web_socket_handler().send_log_message(overlay_id, peer_id, "Overlay Removal.")
-            print("\n[ExpiresScheduler] Remove Overlay (Peers is None)", overlay_id, peer_id)
-        else:
-            Service.get().get_web_socket_handler().send_delete_peer_message(overlay_id, peer_id)
-
-        db_connector.commit()
-    except:
-        db_connector.rollback()
-
-
-scheduler = None
-
-
 @atexit.register
 def goodbye():
     if scheduler is not None:
@@ -105,14 +73,23 @@ def goodbye():
     input('goodbye...')
 
 
-if __name__ == '__main__':
+def args_parsing():
+    parser = argparse.ArgumentParser(
+        prog="Data Collector"
+    )
+    parser.add_argument("-port", help="HOMS Port 정보를 설정한다.", dest="port", type=int, default=8081,
+                        metavar="HOMS Port", required=False)
+    parser.add_argument("-ws-port", help="HOMS WebSocket Port 정보를 설정한다.", dest="ws_port", type=int, default=8082,
+                        metavar="HOMS WebSocket Port", required=False)
+    return parser.parse_args()
 
+
+if __name__ == '__main__':
     debug_mode = SERVER_CONFIG['DEBUG'] if 'DEBUG' in SERVER_CONFIG else False
-    if len(sys.argv) > 1 and sys.argv[1] == '--prod':
-        debug_mode = False
-        print("[SERVER] mode is production", flush=True)
-    else:
-        print("[SERVER] mode is development", flush=True)
+
+    arg_results = args_parsing()
+    SERVER_CONFIG['PORT'] = arg_results.port
+    WEB_SOCKET_CONFIG['PORT'] = arg_results.ws_port
 
     db_manager = DBManager()
     db_init = db_manager.init()
@@ -124,14 +101,13 @@ if __name__ == '__main__':
             db_manager.create_overlay_map()
 
         if 'USING_EXPIRES_SCHEDULER' in SERVER_CONFIG and SERVER_CONFIG['USING_EXPIRES_SCHEDULER']:
-            scheduler = ExpiresScheduler()
-            scheduler.start(SERVER_CONFIG['EXPIRES_SCHEDULER_INTERVAL'], remove_expires_peer_callback)
+            scheduler = ServerScheduler()
+            scheduler.start(SERVER_CONFIG['EXPIRES_SCHEDULER_INTERVAL'])
 
         web_socket_server = Hp2pWebSocketServer()
         web_socket_server.start()
 
-        print("[SERVER] Start Server...", flush=True)
+        print("[SERVER] START...")
         app.run(host=SERVER_CONFIG['HOST'], port=SERVER_CONFIG['PORT'], debug=debug_mode)
     else:
-        print("[DATABASE] Create Error...", flush=True)
-        print("[END] ...", flush=True)
+        print("[SERVER] END...")

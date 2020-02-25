@@ -7,7 +7,6 @@ class Overlay:
         self.heartbeat_timeout = 0
         self._peer_dic = {}
         self.update_time = None
-        self.is_checked_expires = False
 
     def add_peer(self, key, peer):
         self._peer_dic[key] = peer

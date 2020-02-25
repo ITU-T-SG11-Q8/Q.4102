@@ -1,9 +1,8 @@
 import threading
-
 from simple_websocket_server import WebSocketServer
 
 from config import WEB_SOCKET_CONFIG
-from service.service import Service
+from data.factory import Factory
 from web_socket.web_socket_handler import WebSocketHandler
 from web_socket.web_socket_message_handler import WebSocketMessageHandler
 
@@ -18,12 +17,10 @@ class Hp2pWebSocketServer:
         t.start()
 
     def run_web_socket_server(self):
-        print("[SERVER] Start Web Socket Server...", flush=True)
+        print("[SERVER] Start Web Socket Server...")
 
         handler = WebSocketMessageHandler()
-        Service.get().set_web_socket_handler(handler)
+        Factory.get().set_web_socket_message_handler(handler)
 
         server = WebSocketServer(self.host, self.port, WebSocketHandler)
-        Service.get().get_web_socket_handler().set_web_socket_server(server)
-
         server.serve_forever()
