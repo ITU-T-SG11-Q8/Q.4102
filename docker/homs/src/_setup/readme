@@ -1,0 +1,15 @@
+# requirements.txt 를 활용한 Package 설치
+pip install -r requirements.txt
+
+# Package 설치
+pip install Flask
+pip install flask-restful
+pip install PyMySQL
+pip install schedule
+pip install websockets
+pip install simple-websocket-server
+pip install requests
+
+# 실행 명령어
+homs_run.py -port=[서버 Port] -ws-port=[웹소켓 Port]
+python homs_run.py -port=9000 -ws-port=9100
