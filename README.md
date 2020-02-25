@@ -9,7 +9,7 @@
 ### HP2P (Hybrid P2P network)
 - HOMS
 ```
-$ cd network/hp2p/homp_server
+$ cd network/hp2p/homp/_setup
 $ pip install -r requirements.txt
 ```
 
@@ -38,7 +38,9 @@ TBD
 - HOMS
 ```
 $ cd network/hp2p/homs
-$ python homs_run.py
+$ python homs_run.py -port=[Server Port] -ws-port=[WebSocket Port]
+*예)
+  $ python homs_run.py -port=9000 -ws-port=9100
 ```
 
 - HPEER
