@@ -39,8 +39,6 @@ TBD
 ```
 $ cd network/hp2p/homs
 $ python homs_run.py -port=[Server Port] -ws-port=[WebSocket Port]
-*예)
-  $ python homs_run.py -port=9000 -ws-port=9100
 ```
 
 - HPEER
@@ -66,6 +64,11 @@ $ python peer_run.py [parameters]
 ```
 
 ## Usage Examples
+
+### Run HOMS
+``` 
+ $ python homs_run.py -port=9000 -ws-port=9100
+```
 
 ### Overlay network creation
 * Creation of hybrid overlay network by an Owner
