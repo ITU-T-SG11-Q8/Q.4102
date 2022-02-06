@@ -1,7 +1,0 @@
-version: '2'
-services:
-  homs:
-    image: data_collector:1.0
-    command: bash -c "service mysql start && python3.7 /data_collector/data_collector_run.py -ip=127.0.0.1 -port=9001 -ci=1 -si=10 -shifting=true"
-    container_name: data_collector
-    tty: true

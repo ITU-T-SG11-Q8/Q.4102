@@ -1,8 +1,0 @@
-#!/bin/bash
-
-docker rmi homs:1.1
-docker rmi data_collector:1.1
-
-docker build -f Dockerfile_Homs --tag homs:1.1 .
-docker build -f Dockerfile_Data_Collector --tag data_collector:1.1 .
-
