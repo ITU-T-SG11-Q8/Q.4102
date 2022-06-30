@@ -1,8 +1,0 @@
-aioice<0.7.0,>=0.6.13
-attrs
-crc32c
-cryptography>=2.2
-pyee
-pylibsrtp>=0.5.6
-pyopenssl
-websockets

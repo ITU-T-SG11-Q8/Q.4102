@@ -1,5 +1,0 @@
-requests
-websockets
-flask
-schedule
-simple-websocket-server

@@ -1,2 +1,5 @@
-**/__pycache__/
-*.swp
+
+hp2p.go.exe
+hp2p.go
+ws/ws
+.vscode/launch.json
