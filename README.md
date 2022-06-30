@@ -11,21 +11,7 @@ $go mod tidy
 $go build
 ```
 
-
 ## Usage
-
-### OMS
-```
-- Windows
-> cd HOMS/HompServer
-> venv\Scripts\activate.bat
-(venv) > python3 homs_run.py
-
-- Linux/MacOS
-$ cd HOMS/HompServer
-$ source ./venv/bin/activate
-$ python3 homs_run.py
-```
 
 
 ### Peer   
