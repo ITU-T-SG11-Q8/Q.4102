@@ -1,29 +1,5 @@
 # HP2P.Go
 
-## Pre-requisite
-- mysql(or maria) DBMS
-
-## Setup
-
-### OMS(Overlay Management Server)
-- Import ./HOMS/hp2p_2020.sql
-- Create virtual environment
-```
-- Windows
-> cd HOMS/HompServer
-> python3 -m venv venv
-> venv\Scripts\activate.bat
-(venv) > pip3 install -r requirements.txt
-
-- Linux/MacOS
-$ cd HOMS/HompServer
-$ python3 -m venv venv
-$ source ./venv/bin/activate
-$ pip3 install -r requirements.txt
-```
-- Edit configuration
-    - Edit DATABASE_CONFIG field 'HOMS/HompServer/config.py' in as you need
-    - HTTP port and WebSocket port
 
 ### Peer
 - Edit client's configurations in 'Peer/clientconfig.json' 
