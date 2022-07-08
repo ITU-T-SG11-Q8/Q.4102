@@ -1,0 +1,6 @@
+{
+    "OVERLAY_SERVER_ADDR" : "http://127.0.0.1:8081",
+    "SIGNALING_SERVER_ADDR" : "ws://127.0.0.1:8082",
+    "IOT_UDP_PORT" : 9001,
+    "LOG_LEVEL" : 2
+}
