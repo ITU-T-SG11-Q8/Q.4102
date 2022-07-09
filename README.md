@@ -1,40 +1,31 @@
-# HP2P.Go
+# Q.4102
 
+## Usage
 
-### Peer
-- Edit client's configurations in 'Peer/clientconfig.json' 
-- Edit peer's configiurations in 'Peer/peerconfig.json'
-- Build
+1. Edit client's Configurations in 'clientconfig.json'   
+2. Edit peer's Configurations in 'peerconfig.json'   
+3. Build
 ```
 $cd Peer   
 $go mod tidy   
 $go build
 ```
-
-## Usage
-
-
-### Peer   
+4. Run
 ```
-- Help
+- Usage
 $hp2p.go.peer -h
 
-- Run owner peer
+- Owner peer
 $hp2p.go.peer -c -id peer1 -t title
 
-- Run peer's join
+- Join peer
 $hp2p.go.peer -j -id peer2 -t title
 
-- Run standalone peer
+- Peer that does nothing (for use API later)
 $hp2p.go.peer -id peer3
 ```
 
-# Contributors
-- BeauracracyEndless@ 
-- CommitteeKnowledgeless@
-- ClubKkondae@
-
-# LICENSE
+## LICENSE
 
 The MIT License
 

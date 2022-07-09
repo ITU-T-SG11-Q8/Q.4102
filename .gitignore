@@ -3,3 +3,9 @@ hp2p.go.exe
 hp2p.go
 ws/ws
 .vscode/launch.json
+.DS_Store
+hp2p.go.peer
+hp2p.go.peer.exe
+log.txt
+packages/
+*.user

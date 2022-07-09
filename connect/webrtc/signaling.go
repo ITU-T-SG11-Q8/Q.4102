@@ -1,17 +1,18 @@
+// 
 // The MIT License
-
+// 
 // Copyright (c) 2022 ETRI
-
+// 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-
+// 
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-
+// 
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -19,13 +20,14 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+// 
 
 package webrtc
 
 import (
 	"connect"
 	"encoding/json"
-	"log"
+	"logger"
 
 	"github.com/gorilla/websocket"
 )
@@ -42,7 +44,7 @@ func (self *SignalHandler) handler() {
 	for {
 		select {
 		case <-self.end:
-			log.Println("end!!!!!!!!!!!!!")
+			logger.Println(logger.INFO, "signal server end!!!")
 			return
 		case msg := <-self.message:
 			//log.Printf("signalhandler: %s", string(msg))
@@ -50,7 +52,7 @@ func (self *SignalHandler) handler() {
 			tmp := connect.TypeGetter{}
 			err := json.Unmarshal(msg, &tmp)
 			if err != nil {
-				log.Println("signal msg parsing:", err)
+				logger.Println(logger.ERROR, "signal parsing error :", err)
 			} else {
 				switch tmp.Type {
 				case "offer", "answer":
@@ -73,10 +75,10 @@ func (self *SignalHandler) read() {
 	for {
 		_, message, err := self.conn.ReadMessage()
 		if err != nil {
-			log.Println("read:", err)
+			logger.Println(logger.ERROR, "signal recv error:", err)
 			return
 		}
-		//log.Printf("recv: %s", string(message))
+		logger.Println(logger.INFO, "signal recv :", string(message))
 		self.message <- message
 	}
 }
@@ -88,10 +90,11 @@ func (self *SignalHandler) Start(addr string, rsltchan *chan interface{}) {
 	self.end = make(chan struct{})
 	self.message = make(chan []byte)
 
-	log.Println(addr)
+	logger.Println(logger.INFO, "signal server start :", addr)
 	c, _, err := websocket.DefaultDialer.Dial(addr, nil)
 	if err != nil {
-		log.Fatal("dial:", err)
+		logger.Println(logger.ERROR, "signal server error :", err)
+		return
 	}
 	//defer c.Close()
 
@@ -108,7 +111,9 @@ func (self *SignalHandler) Send(msg []byte) {
 
 	err := self.conn.WriteMessage(websocket.TextMessage, msg)
 	if err != nil {
-		log.Println("ws write:", err)
+		logger.Println(logger.ERROR, "signal send error:", err)
 		return
 	}
+
+	//logger.Println(logger.INFO, "signal send :", string(msg))
 }
