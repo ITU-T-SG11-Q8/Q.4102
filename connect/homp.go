@@ -1,18 +1,18 @@
-// 
+//
 // The MIT License
-// 
+//
 // Copyright (c) 2022 ETRI
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,7 +20,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-// 
+//
 
 package connect
 
@@ -103,14 +103,20 @@ func (self *HOMP) QueryOverlay(ovid *string, title *string, desc *string) *[]Hyb
 	return ovinfo
 }
 
-func (self *HOMP) OverlayJoin(hoj *HybridOverlayJoin) *HybridOverlayJoinResponseOverlay {
+func (self *HOMP) OverlayJoin(hoj *HybridOverlayJoin, recovery bool) *HybridOverlayJoinResponse {
 
 	logger.PrintJson(logger.WORK, "Join overlay", hoj)
+
+	url := "/peer"
+
+	if recovery {
+		url += "?recovery=true"
+	}
 
 	client := resty.New()
 	resp, err := client.R().
 		SetBody(hoj).
-		Post(self.OverlayAddr + "/peer")
+		Post(self.OverlayAddr + url)
 
 	if err != nil {
 		logger.Println(logger.WORK, "Join overlay error : ", err)
@@ -122,7 +128,7 @@ func (self *HOMP) OverlayJoin(hoj *HybridOverlayJoin) *HybridOverlayJoinResponse
 
 	logger.PrintJson(logger.WORK, "Join overlay resp", ovinfo)
 
-	return &ovinfo.Overlay
+	return ovinfo
 }
 
 func (self *HOMP) OverlayModification(hom *HybridOverlayModification) *HybridOverlayModificationOverlay {

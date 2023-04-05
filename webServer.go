@@ -1,18 +1,18 @@
-// 
+//
 // The MIT License
-// 
+//
 // Copyright (c) 2022 ETRI
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,7 +20,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-// 
+//
 
 package main
 
@@ -28,12 +28,13 @@ import (
 	"connect"
 	"consts"
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"logger"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -121,7 +122,7 @@ func (h *staticHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		localPath = "webClient/index.html"
 	}
 
-	content, err := ioutil.ReadFile(localPath)
+	content, err := os.ReadFile(localPath)
 	if err != nil {
 		w.WriteHeader(404)
 		w.Write([]byte(http.StatusText(404)))
@@ -221,9 +222,9 @@ func (server *HTTPServer) SetApiHandler(handler *ApiHandler) {
 	http.HandleFunc("/api/graphql", handler.HandleApi)
 }
 
-func (server *HTTPServer) Start() {
+func (server *HTTPServer) Start(port int) {
 	go func() {
-		listener, err := net.Listen("tcp", ":0")
+		listener, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 		if err != nil {
 			panic(err)
 		}
@@ -237,6 +238,7 @@ func (server *HTTPServer) Start() {
 		logger.Println(logger.WORK, "HTTP Server start with :", listener.Addr())
 
 		logger.Println(logger.WORK, "")
+
 		panic(http.ServeTLS(listener, nil, "private.crt", "temp.key"))
 
 	}()

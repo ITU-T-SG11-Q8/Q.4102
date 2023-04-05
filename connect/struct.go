@@ -1,18 +1,18 @@
-// 
+//
 // The MIT License
-// 
+//
 // Copyright (c) 2022 ETRI
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,8 +20,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-// 
-
+//
 
 package connect
 
@@ -86,17 +85,16 @@ type CrPolicy struct {
 }
 
 type HybridOverlayCreationOverlay struct {
-	Title             string       `json:"title"`
-	Type              string       `json:"type"`
-	SubType           string       `json:"sub-type"`
-	OwnerId           string       `json:"owner-id"`
-	Expires           int          `json:"expires"`
-	Description       string       `json:"description"`
-	HeartbeatInterval int          `json:"heartbeat-interval"`
-	HeartbeatTimeout  int          `json:"heartbeat-timeout"`
-	Auth              OverlayAuth  `json:"auth"`
-	CrPolicy          *CrPolicy    `json:"cr-policy,omitempty"`
-	TransPolicy       *TransPolicy `json:"trans_policy,omitempty"`
+	Title             string      `json:"title"`
+	Type              string      `json:"type"`
+	SubType           string      `json:"sub-type"`
+	OwnerId           string      `json:"owner-id"`
+	Expires           int         `json:"expires"`
+	Description       string      `json:"description,omitempty"`
+	HeartbeatInterval int         `json:"heartbeat-interval"`
+	HeartbeatTimeout  int         `json:"heartbeat-timeout"`
+	Auth              OverlayAuth `json:"auth"`
+	CrPolicy          *CrPolicy   `json:"cr-policy,omitempty"`
 }
 
 type HybridOverlayCreation struct {
@@ -117,23 +115,22 @@ type HybridOverlayCreationResponseOverlayInfo struct {
 	HeartbeatTimeout  int          `json:"heartbeat-timeout"`
 	Auth              *OverlayAuth `json:"auth,omitempty"`
 	CrPolicy          *CrPolicy    `json:"cr-policy,omitempty"`
-	TransPolicy       *TransPolicy `json:"trans_policy,omitempty"`
 }
 
 type HybridOverlayJoinOverlay struct {
 	OverlayId string       `json:"overlay-id"`
 	Type      string       `json:"type"`
 	SubType   string       `json:"sub-type"`
-	Expires   int          `json:"expires"`
 	Auth      *OverlayAuth `json:"auth,omitempty"`
-	Recovery  *bool        `json:"recovery,omitempty"`
-	TicketId  *int         `json:"ticket-id,omitempty"`
 }
 
 type HybridOverlayJoinPeer struct {
-	PeerId  string   `json:"peer-id"`
-	Address string   `json:"address"`
-	Auth    PeerAuth `json:"auth"`
+	PeerId     string   `json:"peer-id"`
+	InstanceId int64    `json:"instance-id"`
+	Address    string   `json:"address"`
+	Auth       PeerAuth `json:"auth"`
+	Expires    *int     `json:"expires,omitempty"`
+	TicketId   *int     `json:"ticket-id,omitempty"`
 }
 
 type HybridOverlayJoin struct {
@@ -142,34 +139,44 @@ type HybridOverlayJoin struct {
 }
 
 type HybridOverlayJoinResponseOverlay struct {
-	OverlayId         string         `json:"overlay-id"`
-	Type              string         `json:"type"`
-	SubType           string         `json:"sub-type"`
-	Expires           int            `json:"expires"`
-	HeartbeatInterval int            `json:"heartbeat-interval"`
-	HeartbeatTimeout  int            `json:"heartbeat-timeout"`
-	TicketId          int            `json:"ticket-id"`
-	Status            *OverlayStatus `json:"status,omitempty"`
-	CrPolicy          *CrPolicy      `json:"cr-policy,omitempty"`
-	TransPolicy       *TransPolicy   `json:"trans_policy,omitempty"`
+	OverlayId         string        `json:"overlay-id"`
+	Type              string        `json:"type"`
+	SubType           string        `json:"sub-type"`
+	HeartbeatInterval int           `json:"heartbeat-interval"`
+	HeartbeatTimeout  int           `json:"heartbeat-timeout"`
+	Status            OverlayStatus `json:"status"`
+	CrPolicy          *CrPolicy     `json:"cr-policy,omitempty"`
+}
+
+type HybridOverlayJoinResponsePeer struct {
+	PeerId     string `json:"peer-id"`
+	InstanceId int64  `json:"instance-id"`
+	TicketId   int    `json:"ticket-id"`
+	Expires    int    `json:"expires"`
 }
 
 type HybridOverlayJoinResponse struct {
 	Overlay HybridOverlayJoinResponseOverlay `json:"overlay"`
+	Peer    HybridOverlayJoinResponsePeer    `json:"peer"`
 }
 
 type HybridOverlayModificationOverlay struct {
-	OverlayId   string       `json:"overlay-id"`
-	Title       *string      `json:"title,omitempty"`
-	OwnerId     string       `json:"owner-id"`
-	Expires     *int         `json:"expires,omitempty"`
-	Description *string      `json:"description,omitempty"`
-	Auth        OverlayAuth  `json:"auth"`
-	TransPolicy *TransPolicy `json:"trans_policy,omitempty"`
+	OverlayId   string      `json:"overlay-id"`
+	Title       *string     `json:"title,omitempty"`
+	OwnerId     string      `json:"owner-id"`
+	Expires     *int        `json:"expires,omitempty"`
+	Description *string     `json:"description,omitempty"`
+	Auth        OverlayAuth `json:"auth"`
+}
+
+type HybridOverlayModificationOwnership struct {
+	OwnerId  *string `json:"owner-id,omitempty"`
+	AdminKey *string `json:"admin-key,omitempty"`
 }
 
 type HybridOverlayModification struct {
-	Overlay HybridOverlayModificationOverlay `json:"overlay"`
+	Overlay   HybridOverlayModificationOverlay    `json:"overlay"`
+	Ownership *HybridOverlayModificationOwnership `json:"ownership,omitempty"`
 }
 
 type HybridOverlayRemovalOverlay struct {
@@ -191,20 +198,19 @@ type HybridOverlayRemovalResponse struct {
 }
 
 type OverlayInfo struct {
-	OverlayId         string        `json:"overlay-id"`
-	Title             string        `json:"title"`
-	Type              string        `json:"type"`
-	SubType           string        `json:"sub-type"`
-	OwnerId           string        `json:"owner-id"`
-	Expires           int           `json:"expires"`
-	Description       string        `json:"description"`
-	HeartbeatInterval int           `json:"heartbeat-interval"`
-	HeartbeatTimeout  int           `json:"heartbeat-timeout"`
-	Auth              OverlayAuth   `json:"auth"`
-	CrPolicy          *CrPolicy     `json:"cr-policy"`
-	TransPolicy       *TransPolicy  `json:"trans_policy"`
-	TicketId          *int          `json:"ticket-id"`
-	Status            OverlayStatus `json:"status"`
+	OverlayId string `json:"overlay-id"`
+	Title     string `json:"title"`
+	Type      string `json:"type"`
+	SubType   string `json:"sub-type"`
+	OwnerId   string `json:"owner-id"`
+	//Expires           int         `json:"expires"`
+	Description       string      `json:"description"`
+	HeartbeatInterval int         `json:"heartbeat-interval"`
+	HeartbeatTimeout  int         `json:"heartbeat-timeout"`
+	Auth              OverlayAuth `json:"auth"`
+	CrPolicy          *CrPolicy   `json:"cr-policy"`
+	//TicketId          int           `json:"ticket-id"`
+	Status OverlayStatus `json:"status"`
 }
 
 func (self *OverlayInfo) copy(v interface{}) {
@@ -220,13 +226,12 @@ func (self *OverlayInfo) copy(v interface{}) {
 		self.Type = val.Type
 		self.SubType = val.SubType
 		self.OwnerId = val.OwnerId
-		self.Expires = val.Expires
+		//self.Expires = val.Expires
 		self.Description = val.Description
 		self.HeartbeatInterval = val.HeartbeatInterval
 		self.HeartbeatTimeout = val.HeartbeatTimeout
 		self.Auth = val.Auth
 		self.CrPolicy = val.CrPolicy
-		self.TransPolicy = val.TransPolicy
 	case *HybridOverlayCreationResponseOverlayInfo:
 		val := v.(*HybridOverlayCreationResponseOverlayInfo)
 
@@ -246,8 +251,7 @@ func (self *OverlayInfo) copy(v interface{}) {
 		//self.Expires = val.Expires
 		self.HeartbeatInterval = val.HeartbeatInterval
 		self.HeartbeatTimeout = val.HeartbeatTimeout
-		self.TicketId = &val.TicketId
-		self.Status = *val.Status
+		self.Status = val.Status
 
 	case *HybridOverlayQueryResponseOverlay:
 		val := v.(*HybridOverlayQueryResponseOverlay)
@@ -261,7 +265,7 @@ func (self *OverlayInfo) copy(v interface{}) {
 		self.Type = val.Type
 		self.SubType = val.SubType
 		self.OwnerId = val.OwnerId
-		self.Expires = val.Expires
+		//self.Expires = val.Expires
 		self.Status = val.Status
 
 		if val.Description != nil {
@@ -269,20 +273,15 @@ func (self *OverlayInfo) copy(v interface{}) {
 		}
 		self.Auth = val.Auth
 		self.CrPolicy = val.CrPolicy
-		self.TransPolicy = val.TransPolicy
 	}
 }
 
-type TransPolicy struct {
-	RateControlQuantity int      `json:"rate-control-quantity"`
-	RateControlBitrate  int      `json:"rate-control-bitrate"`
-	TransmissionControl string   `json:"transmission-control"`
-	AuthList            []string `json:"auth-list,omitempty"`
-}
 type PeerInfo struct {
-	PeerId  string   `json:"peer-id"`
-	Address string   `json:"address"`
-	Auth    PeerAuth `json:"auth"`
+	PeerId     string   `json:"peer-id"`
+	InstanceId int64    `json:"instance-id"`
+	Address    string   `json:"address"`
+	Auth       PeerAuth `json:"auth"`
+	TicketId   int      `json:"ticket-id"`
 }
 
 type OverlayAuth struct {
@@ -309,7 +308,6 @@ type HybridOverlayQueryResponseOverlay struct {
 	Description *string       `json:"description,omitempty"`
 	Auth        OverlayAuth   `json:"auth"`
 	CrPolicy    *CrPolicy     `json:"cr-policy,omitempty"`
-	TransPolicy *TransPolicy  `json:"trans_policy,omitempty"`
 }
 
 type HybridOverlayQueryResponse struct {
@@ -321,14 +319,15 @@ type HybridOverlayReportOverlay struct {
 }
 
 type HybridOverlayReportPeer struct {
-	PeerId string     `json:"peer-id"`
-	Status PeerStatus `json:"status"`
-	Auth   PeerAuth   `json:"auth"`
+	PeerId     string   `json:"peer-id"`
+	InstanceId int64    `json:"instance-id"`
+	Auth       PeerAuth `json:"auth"`
 }
 
 type HybridOverlayReport struct {
 	Overlay HybridOverlayReportOverlay `json:"overlay"`
 	Peer    HybridOverlayReportPeer    `json:"peer"`
+	Status  PeerStatus                 `json:"status"`
 }
 
 type HybridOverlayReportResponse struct {
@@ -337,14 +336,15 @@ type HybridOverlayReportResponse struct {
 
 type HybridOverlayRefreshOverlay struct {
 	OverlayId string       `json:"overlay-id"`
-	Expires   *int         `json:"expires,omitempty"`
 	Auth      *OverlayAuth `json:"auth,omitempty"`
 }
 
 type HybridOverlayRefreshPeer struct {
-	PeerId  string   `json:"peer-id"`
-	Address string   `json:"address"`
-	Auth    PeerAuth `json:"auth"`
+	PeerId     string   `json:"peer-id"`
+	InstanceId int64    `json:"instance-id"`
+	Address    string   `json:"address"`
+	Auth       PeerAuth `json:"auth"`
+	Expires    *int     `json:"expires,omitempty"`
 }
 
 type HybridOverlayRefresh struct {
@@ -352,9 +352,15 @@ type HybridOverlayRefresh struct {
 	Peer    HybridOverlayRefreshPeer    `json:"peer"`
 }
 
+type HybridOverlayRefreshResponsePeer struct {
+	PeerId     string `json:"peer-id"`
+	InstanceId int64  `json:"instance-id"`
+	Expires    int    `json:"expires"`
+}
+
 type HybridOverlayRefreshResponse struct {
-	Overlay HybridOverlayRefreshOverlay `json:"overlay"`
-	Peer    HybridOverlayRefreshPeer    `json:"peer"`
+	Overlay HybridOverlayRefreshOverlay      `json:"overlay"`
+	Peer    HybridOverlayRefreshResponsePeer `json:"peer"`
 }
 
 type PeerStatus struct {
@@ -365,11 +371,6 @@ type PeerStatus struct {
 }
 
 type CostMap struct {
-	PeerId  string         `json:"peer_id"`
-	CostMap CostMapCostMap `json:"costmap"`
-}
-
-type CostMapCostMap struct {
 	Primary           []string `json:"primary"`
 	OutgoingCandidate []string `json:"outgoing_candidate"`
 	IncomingCandidate []string `json:"incoming_candidate"`
@@ -385,8 +386,9 @@ type HybridOverlayLeaveOverlay struct {
 }
 
 type HybridOverlayLeavePeer struct {
-	PeerId string    `json:"peer-id"`
-	Auth   *PeerAuth `json:"auth,omitempty"`
+	PeerId     string    `json:"peer-id"`
+	InstanceId int64     `json:"instance-id"`
+	Auth       *PeerAuth `json:"auth,omitempty"`
 }
 
 type HybridOverlayLeave struct {
@@ -422,17 +424,36 @@ type TypeGetter struct {
 }
 
 type PPMessage struct {
-	Ver     byte
-	Type    byte
-	Length  uint16
-	Header  string
-	Content []byte
+	Ver    byte
+	Type   byte
+	Length uint16
+	Header string
+	//ExtensionHeader string
+	Payload []byte
 }
 
-func GetPPMessage(header interface{}, content []byte) *PPMessage {
+func GetPPMessage(header interface{} /*extHeader interface{},*/, payload []byte) *PPMessage {
 	pp := new(PPMessage)
 	pp.Ver = 0x01
 	pp.Type = 0x01
+
+	/*if extHeader != nil {
+		buf, err := json.Marshal(extHeader)
+		if err != nil {
+			logger.Println(logger.ERROR, "extHeader marshal error: ", err)
+			return nil
+		}
+
+		switch header.(type) {
+		case BroadcastDataParams:
+			pp.ExtensionHeader = string(buf)
+			header.(*BroadcastDataParams).ExtHeaderLen = len(pp.ExtensionHeader)
+
+		case GetDataRspParams:
+			pp.ExtensionHeader = string(buf)
+			header.(*GetDataRspParams).ExtHeaderLen = len(pp.ExtensionHeader)
+		}
+	}*/
 
 	buf, err := json.Marshal(header)
 
@@ -442,7 +463,7 @@ func GetPPMessage(header interface{}, content []byte) *PPMessage {
 	}
 	pp.Header = string(buf)
 	pp.Length = uint16(len(pp.Header))
-	pp.Content = content
+	pp.Payload = payload
 
 	return pp
 }
@@ -559,7 +580,7 @@ type PeerBuffermap struct {
 
 type DataPacketPayload struct {
 	Header  *BroadcastData
-	Content *[]byte
+	Payload *[]byte
 }
 
 type DataPacket struct {
@@ -667,8 +688,19 @@ type GetData struct {
 }
 
 type GetDataResponse struct {
-	RspCode   int                 `json:"RspCode"`
-	RspParams BroadcastDataParams `json:"RspParams"`
+	RspCode   int              `json:"RspCode"`
+	RspParams GetDataRspParams `json:"RspParams"`
+}
+
+type GetDataRspParams struct {
+	Peer         GetDataRspParamsPeer       `json:"peer"`
+	Sequence     int                        `json:"sequence"`
+	Payload      BroadcastDataParamsPayload `json:"payload"`
+	ExtHeaderLen int                        `json:"ext-header-len"`
+}
+
+type GetDataRspParamsPeer struct {
+	PeerId string `json:"peer-id"`
 }
 
 type BroadcastData struct {
@@ -677,10 +709,10 @@ type BroadcastData struct {
 }
 
 type BroadcastDataParams struct {
-	Operation *BroadcastDataParamsOperation `json:"operation"`
-	Peer      BroadcastDataParamsPeer       `json:"peer"`
-	App       BroadcastDataParamsApp        `json:"app"`
-	Payload   BroadcastDataParamsPayload    `json:"payload"`
+	Operation    *BroadcastDataParamsOperation `json:"operation"`
+	Peer         BroadcastDataParamsPeer       `json:"peer"`
+	Payload      BroadcastDataParamsPayload    `json:"payload"`
+	ExtHeaderLen int                           `json:"ext-header-len"`
 }
 
 type BroadcastDataParamsOperation struct {
@@ -692,17 +724,17 @@ type BroadcastDataParamsPeer struct {
 	Sequence int    `json:"sequence"`
 }
 
-type BroadcastDataParamsApp struct {
-	AppId string `json:"app-id"`
-}
-
 type BroadcastDataParamsPayload struct {
 	Length      int    `json:"length"`
-	ContentType string `json:"content-type"`
+	PayloadType string `json:"payload-type"`
 }
 
 type BroadcastDataResponse struct {
 	RspCode int `json:"RspCode"`
+}
+
+type BroadcastDataExtensionHeader struct {
+	AppId string `json:"app-id"`
 }
 
 type NetworkPeerInfo struct {

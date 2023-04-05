@@ -25,6 +25,28 @@ $hp2p.go.peer -j -id peer2 -t title
 $hp2p.go.peer -id peer3
 ```
 
+## Live Demo
+You can check the running test server by accessing the following URL:  
+http://144.24.179.237:8081/
+  
+And by setting the following information in clientconfig.json, you can connect to the running server/peer and test it.
+```
+...
+"OVERLAY_SERVER_ADDR" : "http://144.24.179.237:8081",
+"SIGNALING_SERVER_ADDR" : "ws://144.24.179.237:8082",
+...
+```
+  
+Use the following command to connect to the running peer.  
+(xxx is an arbitrary peer ID, excluding peer1, peer2, peer3, and peer4.)
+```
+$hp2p.go.peer -j -id [xxx] -t test_overlay
+```
+Alternatively, you can also create a new overlay to test with the following command.
+```
+$hp2p.go.peer -c -id [xxx] -t [overlay_name]
+```
+  
 ## LICENSE
 
 The MIT License

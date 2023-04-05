@@ -1,18 +1,18 @@
-// 
+//
 // The MIT License
-// 
+//
 // Copyright (c) 2022 ETRI
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,7 +20,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-// 
+//
 
 package main
 
@@ -28,8 +28,10 @@ import (
 	"flag"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"connect"
@@ -59,6 +61,7 @@ func main() {
 	transmissionControl := flag.String("tc", "no", "Transmission control [yes|no]")
 	authList := flag.String("al", "", "Auth list [peer1,peer2,...]")
 	ovId := flag.String("o", "", "Overlay ID for join")
+	wport := flag.Int("wp", 0, "Peer web client port. default random port.")
 
 	flag.Parse()
 
@@ -77,7 +80,15 @@ func main() {
 		return
 	}
 
+	ex, _ := os.Executable()
+	exPath := filepath.Dir(ex)
+
+	os.Chdir(exPath)
+
+	var instanceId int64 = time.Now().UnixMicro()
+
 	logger.Println(logger.INFO, "Peer Id :", *peerId)
+	logger.Println(logger.INFO, "Instance Id :", instanceId)
 	logger.Println(logger.INFO, "Title :", *title)
 	logger.Println(logger.INFO, "Description :", *desc)
 	logger.Println(logger.INFO, "Expires :", *expires)
@@ -93,6 +104,7 @@ func main() {
 	logger.Println(logger.INFO, "Transmission control :", *transmissionControl)
 	logger.Println(logger.INFO, "Auth List :", *authList)
 	logger.Println(logger.INFO, "Overlay ID :", *ovId)
+	logger.Println(logger.INFO, "Web client port :", *wport)
 
 	var overlayCreation *connect.HybridOverlayCreation = nil
 
@@ -139,36 +151,6 @@ func main() {
 		crPolicy.MDCache = *mdCache
 		crPolicy.RecoveryBy = *recoveryBy
 		overlayCreation.Overlay.CrPolicy = crPolicy
-
-		/*transPolicy := new(connect.TransPolicy)
-		transPolicy.RateControlQuantity = *rateControlQuantity
-		transPolicy.RateControlBitrate = *ratecontrolBitrate
-		if *rateControlQuantity > 0 && *ratecontrolBitrate > 0 {
-			logger.Println(logger.ERROR, "'Rate control quantity' and 'Rate control bitrate' cannot be applied at the same time. Use -h for usage.")
-			return
-		}
-		transPolicy.TransmissionControl = *transmissionControl
-		if *transmissionControl == "yes" {
-			if len(*authList) <= 0 {
-				transPolicy.AuthList = []string{*peerId}
-			} else {
-				transPolicy.AuthList = strings.Split(*authList, ",")
-
-				find := false
-				for _, peer := range transPolicy.AuthList {
-					if peer == *peerId {
-						find = true
-						break
-					}
-				}
-
-				if !find {
-					transPolicy.AuthList = append(transPolicy.AuthList, *peerId)
-				}
-			}
-		}
-		overlayCreation.TransPolicy = transPolicy*/
-		overlayCreation.Overlay.TransPolicy = nil
 	}
 
 	logger.Printf(logger.INFO, "\n\nHP2P.Go start...\n\n")
@@ -177,12 +159,12 @@ func main() {
 	logger.Printf(logger.INFO, "Use %v processes.\n\n", runtime.GOMAXPROCS(0))
 
 	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	httpServer := NewHttpServer(*peerId)
-	httpServer.Start()
+	httpServer.Start(*wport)
 
 	var conn connect.Connect = &webrtc.WebrtcConnect{}
-	conn.Init(*peerId)
+	conn.Init(*peerId, instanceId)
 
 	httpServer.SetConnect(&conn)
 
