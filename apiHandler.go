@@ -313,7 +313,7 @@ func (handler *ApiHandler) overlayList(p graphql.ResolveParams) (interface{}, er
 		ov.Type = rslt.Overlay.Type
 		ov.SubType = rslt.Overlay.SubType
 		ov.OwnerId = rslt.Overlay.OwnerId
-		ov.Expires = rslt.Overlay.Expires
+		//ov.Expires = rslt.Overlay.Expires
 		ov.Description = rslt.Overlay.Description
 		ov.Auth = rslt.Overlay.Auth
 
@@ -340,7 +340,7 @@ func (handler *ApiHandler) overlayStatus(p graphql.ResolveParams) (interface{}, 
 	rslt.Type = (*handler.connectObj).OverlayInfo().Type
 	rslt.SubType = (*handler.connectObj).OverlayInfo().SubType
 	rslt.OwnerId = (*handler.connectObj).OverlayInfo().OwnerId
-	rslt.Expires = (*handler.connectObj).GetPeerConfig().Expires
+	//rslt.Expires = (*handler.connectObj).GetPeerConfig().Expires
 	rslt.Description = &(*handler.connectObj).OverlayInfo().Description
 	rslt.Auth = (*handler.connectObj).OverlayInfo().Auth
 	rslt.TicketId = (*handler.connectObj).PeerInfo().TicketId
@@ -420,7 +420,7 @@ func (handler *ApiHandler) overlayCreate(p graphql.ResolveParams) (interface{}, 
 	hoc.Overlay.Type = strings.Split(ovtype, "/")[0]
 	hoc.Overlay.SubType = strings.Split(ovtype, "/")[1]
 	hoc.Overlay.OwnerId = (*handler.connectObj).PeerId()
-	hoc.Overlay.Expires = expires
+	//hoc.Overlay.Expires = expires
 	hoc.Overlay.Description = description
 	hoc.Overlay.HeartbeatInterval = heartbeatInterval
 	hoc.Overlay.HeartbeatTimeout = heartbeatTimeout
@@ -501,12 +501,12 @@ func (handler *ApiHandler) overlayJoin(p graphql.ResolveParams) (interface{}, er
 func (handler *ApiHandler) overlayModify(p graphql.ResolveParams) (interface{}, error) {
 	ovid, _ := p.Args["overlayId"].(string)
 	title, _ := p.Args["title"].(string)
-	expires, _ := p.Args["expires"].(int)
+	//expires, _ := p.Args["expires"].(int)
 	desc, _ := p.Args["description"].(string)
 	adminKey, _ := p.Args["adminKey"].(string)
 	accessKey, _ := p.Args["accessKey"].(string)
 
-	logger.Println(logger.INFO, "api overlay modify ovid:", ovid, "title:", title, "expires:", expires)
+	//logger.Println(logger.INFO, "api overlay modify ovid:", ovid, "title:", title, "expires:", expires)
 	logger.Println(logger.INFO, "api overlay modify desc:", desc, "adminKey:", adminKey, "accessKey:", accessKey)
 
 	hom := connect.HybridOverlayModification{}
@@ -515,9 +515,9 @@ func (handler *ApiHandler) overlayModify(p graphql.ResolveParams) (interface{}, 
 		hom.Overlay.Title = &title
 	}
 	hom.Overlay.OwnerId = (*handler.connectObj).PeerId()
-	if expires > 0 {
+	/*if expires > 0 {
 		hom.Overlay.Expires = &expires
-	}
+	}*/
 	if len(desc) > 0 {
 		hom.Overlay.Description = &desc
 	}

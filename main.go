@@ -44,7 +44,7 @@ func main() {
 	//toPeerId := flag.String("connect", "", "Peer ID to connect")
 	title := flag.String("t", "", "Title")
 	desc := flag.String("d", "", "Description")
-	expires := flag.Int("e", 3600, "Overlay Expires")
+	//expires := flag.Int("e", 3600, "Overlay Expires")
 	create := flag.Bool("c", false, "Create Overlay")
 	join := flag.Bool("j", false, "Join Overlay")
 	hbInterval := flag.Int("hi", 10, "Heartbeat interval")
@@ -91,7 +91,7 @@ func main() {
 	logger.Println(logger.INFO, "Instance Id :", instanceId)
 	logger.Println(logger.INFO, "Title :", *title)
 	logger.Println(logger.INFO, "Description :", *desc)
-	logger.Println(logger.INFO, "Expires :", *expires)
+	//logger.Println(logger.INFO, "Expires :", *expires)
 	logger.Println(logger.INFO, "Create :", *create)
 	logger.Println(logger.INFO, "Heartbeat interval :", *hbInterval)
 	logger.Println(logger.INFO, "Heartbeat timeout :", *hbTimeout)
@@ -115,7 +115,7 @@ func main() {
 		overlayCreation.Overlay.Type = "core"
 		overlayCreation.Overlay.SubType = "tree"
 		overlayCreation.Overlay.OwnerId = *peerId
-		overlayCreation.Overlay.Expires = *expires
+		//overlayCreation.Overlay.Expires = *expires
 		overlayCreation.Overlay.Description = *desc
 		if len(overlayCreation.Overlay.Description) <= 0 {
 			overlayCreation.Overlay.Description = "no description"

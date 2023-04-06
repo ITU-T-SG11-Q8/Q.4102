@@ -85,11 +85,11 @@ type CrPolicy struct {
 }
 
 type HybridOverlayCreationOverlay struct {
-	Title             string      `json:"title"`
-	Type              string      `json:"type"`
-	SubType           string      `json:"sub-type"`
-	OwnerId           string      `json:"owner-id"`
-	Expires           int         `json:"expires"`
+	Title   string `json:"title"`
+	Type    string `json:"type"`
+	SubType string `json:"sub-type"`
+	OwnerId string `json:"owner-id"`
+	//Expires           int         `json:"expires"`
 	Description       string      `json:"description,omitempty"`
 	HeartbeatInterval int         `json:"heartbeat-interval"`
 	HeartbeatTimeout  int         `json:"heartbeat-timeout"`
@@ -106,11 +106,11 @@ type HybridOverlayCreationResponse struct {
 }
 
 type HybridOverlayCreationResponseOverlayInfo struct {
-	OverlayId         string       `json:"overlay-id"`
-	Type              string       `json:"type"`
-	SubType           string       `json:"sub-type"`
-	OwnerId           string       `json:"owner-id"`
-	Expires           int          `json:"expires"`
+	OverlayId string `json:"overlay-id"`
+	Type      string `json:"type"`
+	SubType   string `json:"sub-type"`
+	OwnerId   string `json:"owner-id"`
+	//Expires           int          `json:"expires"`
 	HeartbeatInterval int          `json:"heartbeat-interval"`
 	HeartbeatTimeout  int          `json:"heartbeat-timeout"`
 	Auth              *OverlayAuth `json:"auth,omitempty"`
@@ -142,9 +142,9 @@ type HybridOverlayJoinResponseOverlay struct {
 	OverlayId         string        `json:"overlay-id"`
 	Type              string        `json:"type"`
 	SubType           string        `json:"sub-type"`
+	Status            OverlayStatus `json:"status"`
 	HeartbeatInterval int           `json:"heartbeat-interval"`
 	HeartbeatTimeout  int           `json:"heartbeat-timeout"`
-	Status            OverlayStatus `json:"status"`
 	CrPolicy          *CrPolicy     `json:"cr-policy,omitempty"`
 }
 
@@ -161,10 +161,10 @@ type HybridOverlayJoinResponse struct {
 }
 
 type HybridOverlayModificationOverlay struct {
-	OverlayId   string      `json:"overlay-id"`
-	Title       *string     `json:"title,omitempty"`
-	OwnerId     string      `json:"owner-id"`
-	Expires     *int        `json:"expires,omitempty"`
+	OverlayId string  `json:"overlay-id"`
+	Title     *string `json:"title,omitempty"`
+	OwnerId   string  `json:"owner-id"`
+	//Expires     *int        `json:"expires,omitempty"`
 	Description *string     `json:"description,omitempty"`
 	Auth        OverlayAuth `json:"auth"`
 }
@@ -298,12 +298,12 @@ type OverlayStatus struct {
 }
 
 type HybridOverlayQueryResponseOverlay struct {
-	OverlayId   string        `json:"overlay-id"`
-	Title       string        `json:"title"`
-	Type        string        `json:"type"`
-	SubType     string        `json:"sub-type"`
-	OwnerId     string        `json:"owner-id"`
-	Expires     int           `json:"expires"`
+	OverlayId string `json:"overlay-id"`
+	Title     string `json:"title"`
+	Type      string `json:"type"`
+	SubType   string `json:"sub-type"`
+	OwnerId   string `json:"owner-id"`
+	//Expires     int           `json:"expires"`
 	Status      OverlayStatus `json:"status"`
 	Description *string       `json:"description,omitempty"`
 	Auth        OverlayAuth   `json:"auth"`
@@ -831,12 +831,12 @@ type ApiPeerStatus struct {
 }
 
 type ApiOverlayInfo struct {
-	OverlayId         string      `json:"overlay-id"`
-	Title             string      `json:"title"`
-	Type              string      `json:"type"`
-	SubType           string      `json:"sub-type"`
-	OwnerId           string      `json:"owner-id"`
-	Expires           int         `json:"expires"`
+	OverlayId string `json:"overlay-id"`
+	Title     string `json:"title"`
+	Type      string `json:"type"`
+	SubType   string `json:"sub-type"`
+	OwnerId   string `json:"owner-id"`
+	//Expires           int         `json:"expires"`
 	Description       *string     `json:"description,omitempty"`
 	Auth              OverlayAuth `json:"auth"`
 	TicketId          int         `json:"ticket-id"`
