@@ -1,18 +1,18 @@
-// 
+//
 // The MIT License
-// 
+//
 // Copyright (c) 2022 ETRI
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,7 +20,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-// 
+//
 
 package connect
 
@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"logger"
 	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 
@@ -56,15 +57,17 @@ const (
 )
 
 type Connect interface {
-	Init(peerId string)
+	Init(peerId string, instanceId int64)
 	PeerId() string
+	PeerInstanceId() string
 	//ConnectTo(peerId string, position PeerPosition) (*Peer, bool)
 	ConnectPeers(recovery bool)
 	//BroadcastData(params *BroadcastDataParams, data *[]byte, senderId *string, caching bool, includeOGP bool)
 	CreateOverlay(hoc *HybridOverlayCreation) *OverlayInfo
 	OverlayInfo() *OverlayInfo
+	PeerInfo() *PeerInfo
 	OverlayJoin(recovery bool) *HybridOverlayJoinResponseOverlay
-	OverlayJoinBy(hoj *HybridOverlayJoin) *HybridOverlayJoinResponseOverlay
+	OverlayJoinBy(hoj *HybridOverlayJoin, recovery bool) *HybridOverlayJoinResponseOverlay
 	OverlayModification(hom *HybridOverlayModification) *HybridOverlayModificationOverlay
 	OverlayRemove(hom *HybridOverlayRemoval) *HybridOverlayRemovalResponseOverlay
 	OverlayRefresh(hor *HybridOverlayRefresh) *HybridOverlayRefreshResponse
@@ -121,6 +124,8 @@ type Common struct {
 	//PeerAuth     PeerAuth
 	PeerStatus PeerStatus
 
+	peerInstanceId string
+
 	EstabPeerCount      int
 	HaveOutGoingPrimary bool
 
@@ -156,19 +161,19 @@ type Common struct {
 	connectedAppIds map[string]bool
 }
 
-func (conn *Common) CommonInit(peerId string) {
+func (conn *Common) CommonInit(peerId string, instanceId int64) {
 	conn.PeerInfo.PeerId = peerId
+	conn.PeerInfo.InstanceId = instanceId
 	conn.ClientConfig = ReadClientConfig()
 	logger.Println(logger.INFO, "client config:", conn.ClientConfig)
 	conn.PeerConfig = ReadPeerConfig()
 	logger.Println(logger.INFO, "peer config:", conn.PeerConfig)
 	conn.OverlayAddr = conn.ClientConfig.OverlayServerAddr
-	conn.OverlayInfo.TicketId = nil
+	conn.PeerInfo.TicketId = -1
 
-	conn.PeerStatus.CostMap.PeerId = peerId
-	conn.PeerStatus.CostMap.CostMap.Primary = []string{}
-	conn.PeerStatus.CostMap.CostMap.OutgoingCandidate = []string{}
-	conn.PeerStatus.CostMap.CostMap.IncomingCandidate = []string{}
+	conn.PeerStatus.CostMap.Primary = []string{}
+	conn.PeerStatus.CostMap.OutgoingCandidate = []string{}
+	conn.PeerStatus.CostMap.IncomingCandidate = []string{}
 
 	conn.letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	rand.Seed(time.Now().UnixNano())
@@ -229,9 +234,16 @@ func (conn *Common) GetIoTPeerList() *[]string {
 	for key, val := range conn.CachingBufferMap {
 		for _, dp := range val.DataPackets {
 
-			if dp.Payload.Header.ReqParams.App.AppId == consts.AppIdIoT {
-				list = append(list, key)
+			extHeader := BroadcastDataExtensionHeader{}
+			err := json.Unmarshal((*dp.Payload.Payload)[:dp.Payload.Header.ReqParams.ExtHeaderLen], &extHeader)
+			if err != nil {
+				logger.Println(logger.ERROR, "extheader Unmarshal error:", err)
 				break
+			} else {
+				if extHeader.AppId == consts.AppIdIoT {
+					list = append(list, key)
+					break
+				}
 			}
 		}
 	}
@@ -253,12 +265,19 @@ func (conn *Common) GetIoTDataListByPeer(peerId string) *[]IoTDataResponse {
 
 		for _, dp := range val.DataPackets {
 
-			if dp.Payload.Header.ReqParams.App.AppId != consts.AppIdIoT {
+			extHeader := BroadcastDataExtensionHeader{}
+			err := json.Unmarshal((*dp.Payload.Payload)[:dp.Payload.Header.ReqParams.ExtHeaderLen], &extHeader)
+			if err != nil {
+				logger.Println(logger.ERROR, "extheader Unmarshal error:", err)
 				continue
+			} else {
+				if extHeader.AppId != consts.AppIdIoT {
+					continue
+				}
 			}
 
 			iot := []IoTAppData{}
-			json.Unmarshal(*dp.Payload.Content, &iot)
+			json.Unmarshal(*dp.Payload.Payload, &iot)
 
 			res := IoTDataResponse{}
 			res.DateTime = dp.DateTime.Format("2006-01-02 15:04:05")
@@ -288,12 +307,19 @@ func (conn *Common) GetIoTLastDataByPeer(peerId string) *IoTDataResponse {
 		for i := len(val.DataPackets) - 1; i >= 0; i-- {
 			dp := val.DataPackets[i]
 
-			if dp.Payload.Header.ReqParams.App.AppId != consts.AppIdIoT {
+			extHeader := BroadcastDataExtensionHeader{}
+			err := json.Unmarshal((*dp.Payload.Payload)[:dp.Payload.Header.ReqParams.ExtHeaderLen], &extHeader)
+			if err != nil {
+				logger.Println(logger.ERROR, "extheader Unmarshal error:", err)
 				continue
+			} else {
+				if extHeader.AppId != consts.AppIdIoT {
+					continue
+				}
 			}
 
 			iot := []IoTAppData{}
-			json.Unmarshal(*dp.Payload.Content, &iot)
+			json.Unmarshal(*dp.Payload.Payload, &iot)
 
 			res.DateTime = dp.DateTime.Format("2006-01-02 15:04:05")
 			res.Data = &iot
@@ -320,12 +346,19 @@ func (conn *Common) GetIoTDataListByType(keyword string) *[]*IoTTypeResponse {
 
 		for _, dp := range val.DataPackets {
 
-			if dp.Payload.Header.ReqParams.App.AppId != consts.AppIdIoT {
+			extHeader := BroadcastDataExtensionHeader{}
+			err := json.Unmarshal((*dp.Payload.Payload)[:dp.Payload.Header.ReqParams.ExtHeaderLen], &extHeader)
+			if err != nil {
+				logger.Println(logger.ERROR, "extheader Unmarshal error:", err)
 				continue
+			} else {
+				if extHeader.AppId != consts.AppIdIoT {
+					continue
+				}
 			}
 
 			iot := []IoTAppData{}
-			json.Unmarshal(*dp.Payload.Content, &iot)
+			json.Unmarshal(*dp.Payload.Payload, &iot)
 
 			for _, appdata := range iot {
 				if appdata.Keyword == keyword {
@@ -372,12 +405,19 @@ func (conn *Common) GetIoTLastDataByType(keyword string) *[]*IoTTypeResponse {
 		for i := len(val.DataPackets) - 1; i >= 0; i-- {
 			dp := val.DataPackets[i]
 
-			if dp.Payload.Header.ReqParams.App.AppId != consts.AppIdIoT {
+			extHeader := BroadcastDataExtensionHeader{}
+			err := json.Unmarshal((*dp.Payload.Payload)[:dp.Payload.Header.ReqParams.ExtHeaderLen], &extHeader)
+			if err != nil {
+				logger.Println(logger.ERROR, "extheader Unmarshal error:", err)
 				continue
+			} else {
+				if extHeader.AppId != consts.AppIdIoT {
+					continue
+				}
 			}
 
 			iot := []IoTAppData{}
-			json.Unmarshal(*dp.Payload.Content, &iot)
+			json.Unmarshal(*dp.Payload.Payload, &iot)
 
 			for i := len(iot) - 1; i >= 0; i-- {
 				if iot[i].Keyword == keyword {
@@ -475,24 +515,24 @@ func (conn *Common) AddConnectionInfo(position PeerPosition, toPeerId string) {
 	switch position {
 	case InComingCandidate:
 		conn.PeerStatus.NumInCandidate++
-		conn.PeerStatus.CostMap.CostMap.IncomingCandidate = append(conn.PeerStatus.CostMap.CostMap.IncomingCandidate, toPeerId)
+		conn.PeerStatus.CostMap.IncomingCandidate = append(conn.PeerStatus.CostMap.IncomingCandidate, toPeerId)
 	case OutGoingCandidate:
 		conn.PeerStatus.NumOutCandidate++
-		conn.PeerStatus.CostMap.CostMap.OutgoingCandidate = append(conn.PeerStatus.CostMap.CostMap.OutgoingCandidate, toPeerId)
+		conn.PeerStatus.CostMap.OutgoingCandidate = append(conn.PeerStatus.CostMap.OutgoingCandidate, toPeerId)
 	case InComingPrimary:
-		if conn.RemoveCostMapPeer(&conn.PeerStatus.CostMap.CostMap.IncomingCandidate, toPeerId) {
+		if conn.RemoveCostMapPeer(&conn.PeerStatus.CostMap.IncomingCandidate, toPeerId) {
 			conn.PeerStatus.NumInCandidate--
 		}
 
 		conn.PeerStatus.NumPrimary++
-		conn.PeerStatus.CostMap.CostMap.Primary = append(conn.PeerStatus.CostMap.CostMap.Primary, toPeerId)
+		conn.PeerStatus.CostMap.Primary = append(conn.PeerStatus.CostMap.Primary, toPeerId)
 	case OutGoingPrimary:
-		if conn.RemoveCostMapPeer(&conn.PeerStatus.CostMap.CostMap.OutgoingCandidate, toPeerId) {
+		if conn.RemoveCostMapPeer(&conn.PeerStatus.CostMap.OutgoingCandidate, toPeerId) {
 			conn.PeerStatus.NumOutCandidate--
 		}
 
 		conn.PeerStatus.NumPrimary++
-		conn.PeerStatus.CostMap.CostMap.Primary = append(conn.PeerStatus.CostMap.CostMap.Primary, toPeerId)
+		conn.PeerStatus.CostMap.Primary = append(conn.PeerStatus.CostMap.Primary, toPeerId)
 		conn.HaveOutGoingPrimary = true
 	}
 
@@ -503,7 +543,7 @@ func (conn *Common) AddConnectionInfo(position PeerPosition, toPeerId string) {
 func (conn *Common) DelConnectionInfo(position PeerPosition, toPeerId string) {
 	switch position {
 	case InComingPrimary, OutGoingPrimary:
-		if conn.RemoveCostMapPeer(&conn.PeerStatus.CostMap.CostMap.Primary, toPeerId) {
+		if conn.RemoveCostMapPeer(&conn.PeerStatus.CostMap.Primary, toPeerId) {
 			conn.PeerStatus.NumPrimary--
 
 			if position == OutGoingPrimary {
@@ -512,12 +552,12 @@ func (conn *Common) DelConnectionInfo(position PeerPosition, toPeerId string) {
 		}
 
 	case InComingCandidate:
-		if conn.RemoveCostMapPeer(&conn.PeerStatus.CostMap.CostMap.IncomingCandidate, toPeerId) {
+		if conn.RemoveCostMapPeer(&conn.PeerStatus.CostMap.IncomingCandidate, toPeerId) {
 			conn.PeerStatus.NumInCandidate--
 		}
 
 	case OutGoingCandidate:
-		if conn.RemoveCostMapPeer(&conn.PeerStatus.CostMap.CostMap.OutgoingCandidate, toPeerId) {
+		if conn.RemoveCostMapPeer(&conn.PeerStatus.CostMap.OutgoingCandidate, toPeerId) {
 			conn.PeerStatus.NumOutCandidate--
 		}
 	}
@@ -536,6 +576,13 @@ func (conn *Common) RandStringRunes(n int) string {
 
 func (conn *Common) PeerId() string {
 	return conn.PeerInfo.PeerId
+}
+
+func (conn *Common) PeerInstanceId() string {
+	if conn.peerInstanceId == "" {
+		conn.peerInstanceId = conn.PeerInfo.PeerId + ";" + strconv.FormatInt(conn.PeerInfo.InstanceId, 10)
+	}
+	return conn.peerInstanceId
 }
 
 func (conn *Common) IsOwner() bool {
@@ -560,28 +607,29 @@ func (conn *Common) CreateOverlay(hoc *HybridOverlayCreation) *OverlayInfo {
 	return &conn.OverlayInfo
 }
 
-func (conn *Common) OverlayJoinBy(hoj *HybridOverlayJoin) *HybridOverlayJoinResponseOverlay {
+func (conn *Common) OverlayJoinBy(hoj *HybridOverlayJoin, recovery bool) *HybridOverlayJoinResponseOverlay {
 
-	res := conn.HOMP.OverlayJoin(hoj)
+	res := conn.HOMP.OverlayJoin(hoj, recovery)
 
 	if res == nil {
 		conn.log2WebCallback("Failed to join Overlay.")
 		return nil
 	}
 
-	if len(res.OverlayId) <= 0 {
+	if len(res.Overlay.OverlayId) <= 0 {
 		conn.log2WebCallback("Failed to join Overlay.")
 		return nil
 	}
 
 	conn.log2WebCallback("Join Overlay.")
 
-	if hoj.Overlay.Recovery == nil || !*hoj.Overlay.Recovery {
+	if !recovery {
 
-		conn.OverlayInfo.copy(res)
+		conn.OverlayInfo.copy(&res.Overlay)
+		conn.PeerInfo.TicketId = res.Peer.TicketId
 
-		if res.Expires > 0 {
-			conn.PeerConfig.Expires = res.Expires
+		if res.Peer.Expires > 0 {
+			conn.PeerConfig.Expires = res.Peer.Expires
 			conn.joinTicker = time.NewTicker(time.Millisecond * time.Duration(float32(conn.PeerConfig.Expires)*0.8) * 1000)
 			go func() {
 				for range conn.joinTicker.C {
@@ -593,6 +641,7 @@ func (conn *Common) OverlayJoinBy(hoj *HybridOverlayJoin) *HybridOverlayJoinResp
 					hor := HybridOverlayRefresh{}
 					hor.Overlay.OverlayId = conn.OverlayInfo.OverlayId
 					hor.Peer.PeerId = conn.PeerId()
+					hor.Peer.InstanceId = conn.PeerInfo.InstanceId
 					hor.Peer.Address = conn.PeerInfo.Address
 					hor.Peer.Auth = conn.PeerInfo.Auth
 					conn.HOMP.OverlayRefresh(&hor)
@@ -601,7 +650,7 @@ func (conn *Common) OverlayJoinBy(hoj *HybridOverlayJoin) *HybridOverlayJoinResp
 		}
 	}
 
-	return res
+	return &res.Overlay
 }
 
 func (conn *Common) OverlayJoin(recovery bool) *HybridOverlayJoinResponseOverlay {
@@ -609,15 +658,15 @@ func (conn *Common) OverlayJoin(recovery bool) *HybridOverlayJoinResponseOverlay
 	hoj.Overlay.OverlayId = conn.OverlayInfo.OverlayId
 	hoj.Overlay.Type = conn.OverlayInfo.Type
 	hoj.Overlay.SubType = conn.OverlayInfo.SubType
-	hoj.Overlay.Expires = conn.PeerConfig.Expires
 	hoj.Overlay.Auth = &conn.OverlayInfo.Auth
-	hoj.Overlay.Recovery = &recovery
-	hoj.Overlay.TicketId = conn.OverlayInfo.TicketId
 	hoj.Peer.PeerId = conn.PeerId()
+	hoj.Peer.InstanceId = conn.PeerInfo.InstanceId
 	hoj.Peer.Address = conn.PeerInfo.Address
 	hoj.Peer.Auth = conn.PeerInfo.Auth
+	hoj.Peer.Expires = &conn.PeerConfig.Expires
+	hoj.Peer.TicketId = &conn.PeerInfo.TicketId
 
-	return conn.OverlayJoinBy(hoj)
+	return conn.OverlayJoinBy(hoj, recovery)
 }
 
 func (conn *Common) OverlayModification(hom *HybridOverlayModification) *HybridOverlayModificationOverlay {
@@ -640,7 +689,8 @@ func (conn *Common) OverlayReportBy(overlayId string) *HybridOverlayReportOverla
 	hor := new(HybridOverlayReport)
 	hor.Overlay.OverlayId = overlayId
 	hor.Peer.PeerId = conn.PeerId()
-	hor.Peer.Status = conn.PeerStatus
+	hor.Peer.InstanceId = conn.PeerInfo.InstanceId
+	hor.Status = conn.PeerStatus
 	hor.Peer.Auth = conn.PeerInfo.Auth
 
 	return conn.HOMP.OverlayReport(hor)
@@ -672,6 +722,7 @@ func (conn *Common) OverlayLeaveBy(overlayId string) *HybridOverlayLeaveResponse
 	hol.Overlay.OverlayId = overlayId
 	hol.Overlay.Auth = &conn.OverlayInfo.Auth
 	hol.Peer.PeerId = conn.PeerId()
+	hol.Peer.InstanceId = conn.PeerInfo.InstanceId
 	hol.Peer.Auth = &conn.PeerInfo.Auth
 
 	res := conn.HOMP.OverlayLeave(hol)

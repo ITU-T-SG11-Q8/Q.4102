@@ -1,18 +1,18 @@
-// 
+//
 // The MIT License
-// 
+//
 // Copyright (c) 2022 ETRI
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,7 +20,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-// 
+//
 
 package webrtc
 
@@ -56,8 +56,12 @@ func (self *WebrtcConnect) OverlayInfo() *connect.OverlayInfo {
 	return &self.Common.OverlayInfo
 }
 
-func (self *WebrtcConnect) Init(peerId string) {
-	self.CommonInit(peerId)
+func (self *WebrtcConnect) PeerInfo() *connect.PeerInfo {
+	return &self.Common.PeerInfo
+}
+
+func (self *WebrtcConnect) Init(peerId string, instanceId int64) {
+	self.CommonInit(peerId, instanceId)
 
 	self.recvChan = make(chan interface{})
 	self.sendChan = make(chan interface{})
@@ -88,7 +92,7 @@ func (self *WebrtcConnect) ConnectionInfo() *connect.NetworkResponse {
 	info := new(connect.NetworkResponse)
 
 	info.Peer.PeerId = self.PeerId()
-	info.Peer.TicketId = *self.OverlayInfo().TicketId
+	info.Peer.TicketId = self.PeerInfo().TicketId
 
 	self.PeerMapMux.Lock()
 	for _, peer := range self.peerMap {
@@ -133,7 +137,7 @@ func (self *WebrtcConnect) OnTrack(toPeerId string, kind string, track *pwebrtc.
 
 		for _, peer := range *peerlist {
 
-			if peer.ToPeerId == toPeerId {
+			if peer.ToPeerInstanceId == toPeerId {
 				continue
 			}
 
@@ -156,7 +160,7 @@ func (self *WebrtcConnect) OnTrack(toPeerId string, kind string, track *pwebrtc.
 		for _, peer := range *peerlist {
 			logger.Println(logger.INFO, peer.ToPeerId, "search peer!!!!!!!!")
 
-			if peer.ToPeerId == toPeerId {
+			if peer.ToPeerInstanceId == toPeerId {
 				continue
 			}
 
@@ -165,7 +169,7 @@ func (self *WebrtcConnect) OnTrack(toPeerId string, kind string, track *pwebrtc.
 			}
 
 			if peer.MediaReceive {
-				logger.Println(logger.INFO, peer.ToPeerId, "Reoffer!!!!!!!!")
+				logger.Println(logger.INFO, peer.ToPeerInstanceId, "Reoffer!!!!!!!!")
 				peer.MediaReceive = false
 
 				peer.peerConnection.AddTrack(self.VideoTrack)
@@ -176,7 +180,7 @@ func (self *WebrtcConnect) OnTrack(toPeerId string, kind string, track *pwebrtc.
 		}
 
 		if !successReOffer && OGPrimaryPeer != nil {
-			logger.Println(logger.INFO, OGPrimaryPeer.ToPeerId, "Reoffer OGP!!!!!!!!")
+			logger.Println(logger.INFO, OGPrimaryPeer.ToPeerInstanceId, "Reoffer OGP!!!!!!!!")
 			OGPrimaryPeer.MediaReceive = false
 
 			OGPrimaryPeer.peerConnection.AddTrack(self.VideoTrack)
@@ -215,7 +219,7 @@ func (self *WebrtcConnect) broadcastHello(hello *connect.HelloPeer) {
 			logger.Println(logger.INFO, "after connNum:", hello.ReqParams.Operation.ConnNum)
 
 			for _, peer := range *peerlist {
-				if peer.ToPeerId == hello.ReqParams.Peer.PeerId {
+				if peer.ToPeerInstanceId == hello.ReqParams.Peer.PeerId {
 					continue
 				}
 
@@ -229,7 +233,16 @@ func (self *WebrtcConnect) broadcastHello(hello *connect.HelloPeer) {
 		logger.Println(logger.INFO, "estab:")
 		conPeer, ok := self.ConnectTo(hello.ReqParams.Peer.PeerId, connect.Established)
 
+		if conPeer.releasePeer {
+			return
+		}
+
 		if ok {
+
+			if conPeer.Position != connect.Established {
+				return
+			}
+
 			self.CommunicationMux.Lock()
 
 			if conPeer.SendEstab() {
@@ -267,7 +280,7 @@ func (self *WebrtcConnect) websocketHello() {
 		PeerId string `json:"peer-id"`
 	}{
 		"hello",
-		self.PeerId(),
+		self.PeerInstanceId(),
 	}
 
 	self.sendChan <- hello
@@ -279,7 +292,7 @@ func (self *WebrtcConnect) websocketBye() {
 		PeerId string `json:"peer-id"`
 	}{
 		"bye",
-		self.PeerId(),
+		self.PeerInstanceId(),
 	}
 
 	self.sendChan <- hello
@@ -330,11 +343,12 @@ func (self *WebrtcConnect) signalSend() {
 			switch send.(type) {
 			case connect.RTCSessionDescription:
 				sdp := send.(connect.RTCSessionDescription)
-				sdp.Fromid = self.PeerId()
+				sdp.Fromid = self.PeerInstanceId()
 				obj = sdp
+				logger.Println(logger.WORK, "send", sdp.Type, "to", sdp.Toid)
 			case connect.RTCIceCandidate:
 				ice := send.(connect.RTCIceCandidate)
-				ice.Fromid = self.PeerId()
+				ice.Fromid = self.PeerInstanceId()
 				obj = ice
 			default:
 				obj = send
@@ -359,57 +373,50 @@ func (self *WebrtcConnect) signalReceive() {
 				sdp := recv.(connect.RTCSessionDescription)
 				//fmt.Println(sdp)
 
-				if sdp.Toid == self.PeerId() {
+				if sdp.Toid == self.PeerInstanceId() {
 
 					self.PeerMapMux.Lock()
 					peer, ok := self.peerMap[sdp.Fromid]
 
 					if ok {
-						logger.Println(logger.WORK, "receive", sdp.Type, "from", sdp.Fromid)
+						logger.Println(logger.WORK, "receive", sdp.Type, "from", sdp.Fromid, "(connected)")
 						if sdp.Type == "answer" {
 							peer.SetSdp(sdp)
 						} else if sdp.Type == "offer" {
-							if peer.Position == connect.SendHello {
-								logger.Println(logger.WORK, sdp.Fromid, "Already connect. ignore.")
+							if peer.Position != connect.InComingPrimary && peer.Position != connect.OutGoingPrimary {
+
+								if peer.Position == connect.Established {
+
+									logger.Println(logger.ERROR, "!!!!!!!!!!!!! cancel estab !!!!!!!!!!!!")
+									self.PeerMapMux.Unlock()
+									self.DisconnectFrom(peer)
+									self.PeerMapMux.Lock()
+
+									self.newPeerReceiveOffer(sdp)
+
+								} else {
+									logger.Println(logger.WORK, sdp.Fromid, "Already connect. ignore.")
+								}
 							} else {
 								peer.ReceiveOffer(sdp)
 							}
 						}
-						self.PeerMapMux.Unlock()
 					} else {
 						if sdp.Type == "offer" {
 							logger.Printf(logger.WORK, "receive offer from %s", sdp.Fromid)
 
-							connectChan := make(chan bool, 1)
-
-							/*peer = NewPeer(sdp.Fromid, &self.Common, connect.InComing,
-							&self.sendChan, &connectChan, &self.broadcastChan, self.DisconnectFrom,
-							self.OnTrack, self.RecvScanTree, self.RecvScanTreeResponse, self.recvChat,
-							self.BroadcastData, self.GetBuffermap)*/
-							peer = NewPeer(sdp.Fromid, connect.InComing, &connectChan, self)
-							self.peerMap[sdp.Fromid] = peer
-							self.PeerMapMux.Unlock()
-
-							peer.ReceiveOffer(sdp)
-
-							go func() {
-								conn, ok := <-connectChan
-
-								if !conn && ok {
-									self.DisconnectFrom(peer)
-								}
-							}()
-						} else {
-							self.PeerMapMux.Unlock()
+							self.newPeerReceiveOffer(sdp)
 						}
 					}
+
+					self.PeerMapMux.Unlock()
 				}
 
 			case connect.RTCIceCandidate:
 				ice := recv.(connect.RTCIceCandidate)
 				//fmt.Println(ice)
 
-				if ice.Toid == self.PeerId() {
+				if ice.Toid == self.PeerInstanceId() {
 					peer, ok := self.peerMap[ice.Fromid]
 
 					if ok {
@@ -420,6 +427,23 @@ func (self *WebrtcConnect) signalReceive() {
 			}
 		}
 	}
+}
+
+func (self *WebrtcConnect) newPeerReceiveOffer(sdp connect.RTCSessionDescription) {
+	connectChan := make(chan bool, 1)
+
+	peer := NewPeer(sdp.Fromid, connect.InComing, &connectChan, self)
+	self.peerMap[sdp.Fromid] = peer
+
+	peer.ReceiveOffer(sdp)
+
+	go func() {
+		conn, ok := <-connectChan
+
+		if !conn && ok {
+			self.DisconnectFrom(peer)
+		}
+	}()
 }
 
 func (self *WebrtcConnect) probePeers() {
@@ -510,21 +534,21 @@ func (self *WebrtcConnect) ConnectPeers(recovery bool) {
 
 			self.position = connect.SendHello
 
-			conPeer, conn := self.ConnectTo(peer.PeerId, connect.SendHello)
+			conPeer, conn := self.ConnectTo(peer.PeerId+";"+strconv.FormatInt(peer.InstanceId, 10), connect.SendHello)
 
 			if !conn {
 				if conPeer != nil && conPeer.Position == connect.OutGoingCandidate {
 					if conPeer.setPrimary() {
-						logger.Println(logger.INFO, "Success primary with", conPeer.ToPeerId)
+						logger.Println(logger.INFO, "Success primary with", conPeer.ToPeerInstanceId)
 						break
 					}
 				}
-				logger.Println(logger.INFO, "Failed primary with", conPeer.ToPeerId)
+				logger.Println(logger.INFO, "Failed primary with", conPeer.ToPeerInstanceId)
 				continue
 			}
 
 			if !conPeer.sendHello() {
-				logger.Println(logger.ERROR, conPeer.ToPeerId, "Failed to send hello")
+				logger.Println(logger.ERROR, conPeer.ToPeerInstanceId, "Failed to send hello")
 				self.DisconnectFrom(conPeer)
 				continue
 			}
@@ -583,17 +607,17 @@ func (self *WebrtcConnect) ConnectPeers(recovery bool) {
 	}
 }
 
-func (self *WebrtcConnect) ConnectTo(toPeerId string, positon connect.PeerPosition) (*Peer, bool) {
-	logger.Println(logger.WORK, "Try connect to", toPeerId)
+func (self *WebrtcConnect) ConnectTo(toPeerInstanceId string, positon connect.PeerPosition) (*Peer, bool) {
+	logger.Println(logger.WORK, "Try connect to", toPeerInstanceId)
 	self.PeerMapMux.Lock()
 
-	old, ok := self.peerMap[toPeerId]
+	old, ok := self.peerMap[toPeerInstanceId]
 
 	var rslt bool = false
 	var peer *Peer = nil
 
 	if ok {
-		logger.Println(logger.WORK, "Already connect to", toPeerId)
+		logger.Println(logger.WORK, "Already connect to", toPeerInstanceId)
 		peer = old
 		self.PeerMapMux.Unlock()
 	} else {
@@ -602,9 +626,9 @@ func (self *WebrtcConnect) ConnectTo(toPeerId string, positon connect.PeerPositi
 		&self.sendChan, &connectChan, &self.broadcastChan, self.DisconnectFrom, self.OnTrack,
 		self.RecvScanTree, self.RecvScanTreeResponse, self.recvChat, self.BroadcastData, self.GetBuffermap)*/
 
-		peer = NewPeer(toPeerId, positon, &connectChan, self)
+		peer = NewPeer(toPeerInstanceId, positon, &connectChan, self)
 
-		self.peerMap[toPeerId] = peer
+		self.peerMap[toPeerInstanceId] = peer
 		self.PeerMapMux.Unlock()
 
 		peer.CreateOffer()
@@ -622,9 +646,9 @@ func (self *WebrtcConnect) DisconnectFrom(peer *Peer) {
 
 	self.PeerMapMux.Lock()
 
-	logger.Println(logger.WORK, "Disconnect from", peer.ToPeerId)
+	logger.Println(logger.WORK, "Disconnect from", peer.ToPeerInstanceId)
 
-	delete(self.peerMap, peer.ToPeerId)
+	delete(self.peerMap, peer.ToPeerInstanceId)
 
 	/*self.CachingBufferMapMutex.Lock()
 	delete(self.CachingBufferMap, peer.ToPeerId)
@@ -709,13 +733,13 @@ func (self *WebrtcConnect) RecvScanTree(req *connect.ScanTree, peer *Peer) {
 
 		//peers = self.allPrimary()
 		for _, primary := range *peers {
-			if peer.ToPeerId != primary.ToPeerId {
+			if peer.ToPeerInstanceId != primary.ToPeerInstanceId {
 				primary.broadcastScanTree(req)
 			}
 		}
 	} else {
 		res.RspCode = connect.RspCode_ScanTreeLeaf
-		path := append([][]string{{self.PeerId(), strconv.Itoa(*self.OverlayInfo().TicketId), self.Common.PeerInfo.Address}}, req.ReqParams.Overlay.Path...)
+		path := append([][]string{{self.PeerId(), strconv.Itoa(self.PeerInfo().TicketId), self.Common.PeerInfo.Address}}, req.ReqParams.Overlay.Path...)
 		res.RspParams.Overlay.Path = path
 		peer.sendScanTreeResponse(&res)
 	}
@@ -736,11 +760,11 @@ func (self *WebrtcConnect) RecvScanTreeResponse(res *connect.ScanTreeResponse) {
 
 		logger.Println(logger.INFO, "ScanTree response relay:", res.RspParams.Overlay.Via)
 
-		path := append([][]string{{via[0], strconv.Itoa(*self.OverlayInfo().TicketId), via[1]}}, res.RspParams.Overlay.Path...)
+		path := append([][]string{{via[0], strconv.Itoa(self.PeerInfo().TicketId), via[1]}}, res.RspParams.Overlay.Path...)
 		res.RspParams.Overlay.Path = path
 
 		for _, peer := range self.peerMap {
-			logger.Println(logger.INFO, "~~~~~~~~~~~ topeer:", peer.ToPeerId)
+			logger.Println(logger.INFO, "~~~~~~~~~~~ topeer:", peer.ToPeerInstanceId)
 			//if strings.Compare(peer.ToPeerId, res.RspParams.Overlay.Via[0][0]) == 0 {
 			if peer.ToPeerId == res.RspParams.Overlay.Via[0][0] {
 				logger.Println(logger.INFO, "~!!!!!!!!!!!!! send scan rel peer:", peer.ToPeerId)
@@ -764,17 +788,25 @@ func (self *WebrtcConnect) SendData(data *[]byte, appId string) {
 	req.ReqParams.Operation.Ack = self.PeerConfig.BroadcastOperationAck
 	req.ReqParams.Peer.PeerId = self.PeerId()
 	req.ReqParams.Peer.Sequence = self.getBroadcastDataSeq()
-	req.ReqParams.App.AppId = appId
-
-	if appId == consts.AppIdMedia {
-		req.ReqParams.Payload.ContentType = consts.ContentTypeOctetStream
-	} else {
-		req.ReqParams.Payload.ContentType = consts.ContentTypeText
-	}
+	req.ReqParams.Payload.Length = len(*data)
 
 	databyte := *data
 
-	req.ReqParams.Payload.Length = len(*data)
+	extHeader := connect.BroadcastDataExtensionHeader{}
+	extHeader.AppId = appId
+	buf, err := json.Marshal(extHeader)
+	if err != nil {
+		logger.Println(logger.ERROR, "extHeader marshal error: ", err)
+	} else {
+		req.ReqParams.ExtHeaderLen = len(buf)
+		databyte = append(buf, databyte...)
+	}
+
+	if appId == consts.AppIdMedia {
+		req.ReqParams.Payload.PayloadType = consts.PayloadTypeOctetStream
+	} else {
+		req.ReqParams.Payload.PayloadType = consts.PayloadTypeText
+	}
 
 	self.BroadcastData(&req.ReqParams, &databyte, nil, true, true)
 }
@@ -792,7 +824,7 @@ func (self *WebrtcConnect) BroadcastCachingData(sourcePeerId *string, sequence i
 
 		for _, dp := range buf.DataPackets {
 			if sequence == dp.Sequence {
-				self.BroadcastData(&dp.Payload.Header.ReqParams, dp.Payload.Content, &buf.SourcePeerId, false, true)
+				self.BroadcastData(&dp.Payload.Header.ReqParams, dp.Payload.Payload, &buf.SourcePeerId, false, true)
 				break
 			}
 		}
@@ -867,7 +899,7 @@ func (self *WebrtcConnect) BroadcastData(params *connect.BroadcastDataParams, da
 			continue
 		}
 
-		logger.Println(logger.WORK, peer.ToPeerId, "send broadcastdata:", req)
+		logger.Println(logger.WORK, peer.ToPeerInstanceId, "send broadcastdata:", req)
 		peer.sendPPMessage(msg)
 	}
 }
@@ -973,7 +1005,7 @@ func (self *WebrtcConnect) dataCaching(header *connect.BroadcastData, data *[]by
 	dp.DateTime = time.Now()
 	dp.Sequence = header.ReqParams.Peer.Sequence
 	dp.Payload.Header = header
-	dp.Payload.Content = data
+	dp.Payload.Payload = data
 
 	buf.DataPackets = append(buf.DataPackets, dp)
 	buf.BufferMutax.Unlock()
@@ -1106,7 +1138,7 @@ func (self *WebrtcConnect) recoveryDataForPull() {
 				primaryBufmap = pb
 			}
 		case <-time.After(time.Second * 5):
-			logger.Println(logger.ERROR, peer.ToPeerId, "Recv Buffermap response timeout!")
+			logger.Println(logger.ERROR, peer.ToPeerInstanceId, "Recv Buffermap response timeout!")
 			continue
 		}
 	}

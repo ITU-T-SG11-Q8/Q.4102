@@ -1,18 +1,18 @@
-// 
+//
 // The MIT License
-// 
+//
 // Copyright (c) 2022 ETRI
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,7 +20,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-// 
+//
 
 package main
 
@@ -313,7 +313,7 @@ func (handler *ApiHandler) overlayList(p graphql.ResolveParams) (interface{}, er
 		ov.Type = rslt.Overlay.Type
 		ov.SubType = rslt.Overlay.SubType
 		ov.OwnerId = rslt.Overlay.OwnerId
-		ov.Expires = rslt.Overlay.Expires
+		//ov.Expires = rslt.Overlay.Expires
 		ov.Description = rslt.Overlay.Description
 		ov.Auth = rslt.Overlay.Auth
 
@@ -329,7 +329,7 @@ func (handler *ApiHandler) overlayList(p graphql.ResolveParams) (interface{}, er
 func (handler *ApiHandler) overlayStatus(p graphql.ResolveParams) (interface{}, error) {
 	logger.Println(logger.INFO, "api overlay status")
 
-	if (*handler.connectObj).OverlayInfo().TicketId == nil {
+	if (*handler.connectObj).PeerInfo().TicketId < 0 {
 		return nil, nil
 	}
 
@@ -340,10 +340,10 @@ func (handler *ApiHandler) overlayStatus(p graphql.ResolveParams) (interface{}, 
 	rslt.Type = (*handler.connectObj).OverlayInfo().Type
 	rslt.SubType = (*handler.connectObj).OverlayInfo().SubType
 	rslt.OwnerId = (*handler.connectObj).OverlayInfo().OwnerId
-	rslt.Expires = (*handler.connectObj).OverlayInfo().Expires
+	//rslt.Expires = (*handler.connectObj).GetPeerConfig().Expires
 	rslt.Description = &(*handler.connectObj).OverlayInfo().Description
 	rslt.Auth = (*handler.connectObj).OverlayInfo().Auth
-	rslt.TicketId = *(*handler.connectObj).OverlayInfo().TicketId
+	rslt.TicketId = (*handler.connectObj).PeerInfo().TicketId
 	rslt.HeartbeatInterval = (*handler.connectObj).OverlayInfo().HeartbeatInterval
 	rslt.HeartbeatTimeout = (*handler.connectObj).OverlayInfo().HeartbeatTimeout
 
@@ -420,7 +420,7 @@ func (handler *ApiHandler) overlayCreate(p graphql.ResolveParams) (interface{}, 
 	hoc.Overlay.Type = strings.Split(ovtype, "/")[0]
 	hoc.Overlay.SubType = strings.Split(ovtype, "/")[1]
 	hoc.Overlay.OwnerId = (*handler.connectObj).PeerId()
-	hoc.Overlay.Expires = expires
+	//hoc.Overlay.Expires = expires
 	hoc.Overlay.Description = description
 	hoc.Overlay.HeartbeatInterval = heartbeatInterval
 	hoc.Overlay.HeartbeatTimeout = heartbeatTimeout
@@ -477,23 +477,23 @@ func (handler *ApiHandler) overlayJoin(p graphql.ResolveParams) (interface{}, er
 	hoj.Overlay.OverlayId = ovid
 	hoj.Overlay.Type = (*handler.connectObj).OverlayInfo().Type
 	hoj.Overlay.SubType = (*handler.connectObj).OverlayInfo().SubType
-	hoj.Overlay.Expires = expires
 	hoj.Overlay.Auth = &(*handler.connectObj).OverlayInfo().Auth
 	if len(accessKey) > 0 {
 		hoj.Overlay.Auth.AccessKey = &accessKey
 	}
-	hoj.Overlay.Recovery = &recovery
-	hoj.Overlay.TicketId = (*handler.connectObj).OverlayInfo().TicketId
+
 	hoj.Peer.PeerId = (*handler.connectObj).PeerId()
 	hoj.Peer.Address = (*handler.connectObj).GetPeerInfo().Address
 	if len(peerAuth) > 0 {
 		(*handler.connectObj).GetPeerInfo().Auth.Password = peerAuth
 	}
 	hoj.Peer.Auth = (*handler.connectObj).GetPeerInfo().Auth
+	hoj.Peer.Expires = &expires
+	hoj.Peer.TicketId = &(*handler.connectObj).PeerInfo().TicketId
 
 	logger.PrintJson(logger.INFO, "join option:", hoj)
 
-	joinOverlay := (*handler.connectObj).OverlayJoinBy(hoj)
+	joinOverlay := (*handler.connectObj).OverlayJoinBy(hoj, recovery)
 
 	return joinOverlay, nil
 }
@@ -501,12 +501,12 @@ func (handler *ApiHandler) overlayJoin(p graphql.ResolveParams) (interface{}, er
 func (handler *ApiHandler) overlayModify(p graphql.ResolveParams) (interface{}, error) {
 	ovid, _ := p.Args["overlayId"].(string)
 	title, _ := p.Args["title"].(string)
-	expires, _ := p.Args["expires"].(int)
+	//expires, _ := p.Args["expires"].(int)
 	desc, _ := p.Args["description"].(string)
 	adminKey, _ := p.Args["adminKey"].(string)
 	accessKey, _ := p.Args["accessKey"].(string)
 
-	logger.Println(logger.INFO, "api overlay modify ovid:", ovid, "title:", title, "expires:", expires)
+	//logger.Println(logger.INFO, "api overlay modify ovid:", ovid, "title:", title, "expires:", expires)
 	logger.Println(logger.INFO, "api overlay modify desc:", desc, "adminKey:", adminKey, "accessKey:", accessKey)
 
 	hom := connect.HybridOverlayModification{}
@@ -515,9 +515,9 @@ func (handler *ApiHandler) overlayModify(p graphql.ResolveParams) (interface{}, 
 		hom.Overlay.Title = &title
 	}
 	hom.Overlay.OwnerId = (*handler.connectObj).PeerId()
-	if expires > 0 {
+	/*if expires > 0 {
 		hom.Overlay.Expires = &expires
-	}
+	}*/
 	if len(desc) > 0 {
 		hom.Overlay.Description = &desc
 	}
@@ -569,7 +569,7 @@ func (handler *ApiHandler) overlayRefresh(p graphql.ResolveParams) (interface{},
 	hor := connect.HybridOverlayRefresh{}
 	hor.Overlay.OverlayId = ovid
 	if expires > 0 {
-		hor.Overlay.Expires = &expires
+		hor.Peer.Expires = &expires
 	}
 	if len(accessKey) > 0 {
 		hor.Overlay.Auth.AccessKey = &accessKey
@@ -589,7 +589,7 @@ func (handler *ApiHandler) overlayRefresh(p graphql.ResolveParams) (interface{},
 
 	rslt := connect.ApiOverlayRefreshResponse{}
 	rslt.OverlayId = refresh.Overlay.OverlayId
-	rslt.Expires = *refresh.Overlay.Expires
+	rslt.Expires = refresh.Peer.Expires
 	rslt.PeerId = refresh.Peer.PeerId
 
 	return rslt, nil
@@ -775,10 +775,10 @@ func (handler *ApiHandler) configQuery() *graphql.Object {
 						info.NetworkAddress = (*handler.connectObj).GetPeerInfo().Address
 						info.OverlayNetwork.OverlayTitle = (*handler.connectObj).OverlayInfo().Title
 						info.OverlayNetwork.OverlayId = (*handler.connectObj).OverlayInfo().OverlayId
-						if (*handler.connectObj).OverlayInfo().TicketId == nil {
+						if (*handler.connectObj).PeerInfo().TicketId < 0 {
 							info.OverlayNetwork.TicketId = 0
 						} else {
-							info.OverlayNetwork.TicketId = *(*handler.connectObj).OverlayInfo().TicketId
+							info.OverlayNetwork.TicketId = (*handler.connectObj).PeerInfo().TicketId
 						}
 						info.DebugLevel = logger.LEVEL
 						info.PeerAuth = (*handler.connectObj).GetPeerInfo().Auth.Password
