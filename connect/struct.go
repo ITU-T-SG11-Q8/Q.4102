@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"logger"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -85,11 +86,10 @@ type CrPolicy struct {
 }
 
 type HybridOverlayCreationOverlay struct {
-	Title   string `json:"title"`
-	Type    string `json:"type"`
-	SubType string `json:"sub-type"`
-	OwnerId string `json:"owner-id"`
-	//Expires           int         `json:"expires"`
+	Title             string      `json:"title"`
+	Type              string      `json:"type"`
+	SubType           string      `json:"sub-type"`
+	OwnerId           string      `json:"owner-id"`
 	Description       string      `json:"description,omitempty"`
 	HeartbeatInterval int         `json:"heartbeat-interval"`
 	HeartbeatTimeout  int         `json:"heartbeat-timeout"`
@@ -106,11 +106,10 @@ type HybridOverlayCreationResponse struct {
 }
 
 type HybridOverlayCreationResponseOverlayInfo struct {
-	OverlayId string `json:"overlay-id"`
-	Type      string `json:"type"`
-	SubType   string `json:"sub-type"`
-	OwnerId   string `json:"owner-id"`
-	//Expires           int          `json:"expires"`
+	OverlayId         string       `json:"overlay-id"`
+	Type              string       `json:"type"`
+	SubType           string       `json:"sub-type"`
+	OwnerId           string       `json:"owner-id"`
 	HeartbeatInterval int          `json:"heartbeat-interval"`
 	HeartbeatTimeout  int          `json:"heartbeat-timeout"`
 	Auth              *OverlayAuth `json:"auth,omitempty"`
@@ -125,12 +124,12 @@ type HybridOverlayJoinOverlay struct {
 }
 
 type HybridOverlayJoinPeer struct {
-	PeerId     string   `json:"peer-id"`
-	InstanceId int64    `json:"instance-id"`
-	Address    string   `json:"address"`
-	Auth       PeerAuth `json:"auth"`
-	Expires    *int     `json:"expires,omitempty"`
-	TicketId   *int     `json:"ticket-id,omitempty"`
+	PeerId string `json:"peer-id"`
+	//InstanceId int64    `json:"instance-id"`
+	Address  string   `json:"address"`
+	Auth     PeerAuth `json:"auth"`
+	Expires  *int     `json:"expires,omitempty"`
+	TicketId *int     `json:"ticket-id,omitempty"`
 }
 
 type HybridOverlayJoin struct {
@@ -149,10 +148,10 @@ type HybridOverlayJoinResponseOverlay struct {
 }
 
 type HybridOverlayJoinResponsePeer struct {
-	PeerId     string `json:"peer-id"`
-	InstanceId int64  `json:"instance-id"`
-	TicketId   int    `json:"ticket-id"`
-	Expires    int    `json:"expires"`
+	PeerId string `json:"peer-id"`
+	//InstanceId int64  `json:"instance-id"`
+	TicketId int `json:"ticket-id"`
+	Expires  int `json:"expires"`
 }
 
 type HybridOverlayJoinResponse struct {
@@ -161,10 +160,9 @@ type HybridOverlayJoinResponse struct {
 }
 
 type HybridOverlayModificationOverlay struct {
-	OverlayId string  `json:"overlay-id"`
-	Title     *string `json:"title,omitempty"`
-	OwnerId   string  `json:"owner-id"`
-	//Expires     *int        `json:"expires,omitempty"`
+	OverlayId   string      `json:"overlay-id"`
+	Title       *string     `json:"title,omitempty"`
+	OwnerId     string      `json:"owner-id"`
 	Description *string     `json:"description,omitempty"`
 	Auth        OverlayAuth `json:"auth"`
 }
@@ -198,12 +196,11 @@ type HybridOverlayRemovalResponse struct {
 }
 
 type OverlayInfo struct {
-	OverlayId string `json:"overlay-id"`
-	Title     string `json:"title"`
-	Type      string `json:"type"`
-	SubType   string `json:"sub-type"`
-	OwnerId   string `json:"owner-id"`
-	//Expires           int         `json:"expires"`
+	OverlayId         string      `json:"overlay-id"`
+	Title             string      `json:"title"`
+	Type              string      `json:"type"`
+	SubType           string      `json:"sub-type"`
+	OwnerId           string      `json:"owner-id"`
 	Description       string      `json:"description"`
 	HeartbeatInterval int         `json:"heartbeat-interval"`
 	HeartbeatTimeout  int         `json:"heartbeat-timeout"`
@@ -226,7 +223,9 @@ func (self *OverlayInfo) copy(v interface{}) {
 		self.Type = val.Type
 		self.SubType = val.SubType
 		self.OwnerId = val.OwnerId
-		//self.Expires = val.Expires
+		if strings.Contains(self.OwnerId, ";") {
+			self.OwnerId = strings.Split(self.OwnerId, ";")[0]
+		}
 		self.Description = val.Description
 		self.HeartbeatInterval = val.HeartbeatInterval
 		self.HeartbeatTimeout = val.HeartbeatTimeout
@@ -248,7 +247,6 @@ func (self *OverlayInfo) copy(v interface{}) {
 			return
 		}
 
-		//self.Expires = val.Expires
 		self.HeartbeatInterval = val.HeartbeatInterval
 		self.HeartbeatTimeout = val.HeartbeatTimeout
 		self.Status = val.Status
@@ -265,7 +263,10 @@ func (self *OverlayInfo) copy(v interface{}) {
 		self.Type = val.Type
 		self.SubType = val.SubType
 		self.OwnerId = val.OwnerId
-		//self.Expires = val.Expires
+		//remove after ";" in owner-id
+		if strings.Contains(self.OwnerId, ";") {
+			self.OwnerId = strings.Split(self.OwnerId, ";")[0]
+		}
 		self.Status = val.Status
 
 		if val.Description != nil {
@@ -277,11 +278,11 @@ func (self *OverlayInfo) copy(v interface{}) {
 }
 
 type PeerInfo struct {
-	PeerId     string   `json:"peer-id"`
-	InstanceId int64    `json:"instance-id"`
-	Address    string   `json:"address"`
-	Auth       PeerAuth `json:"auth"`
-	TicketId   int      `json:"ticket-id"`
+	PeerId string `json:"peer-id"`
+	//InstanceId int64    `json:"instance-id,omitempty"`
+	Address  string   `json:"address"`
+	Auth     PeerAuth `json:"auth"`
+	TicketId int      `json:"ticket-id"`
 }
 
 type OverlayAuth struct {
@@ -298,12 +299,11 @@ type OverlayStatus struct {
 }
 
 type HybridOverlayQueryResponseOverlay struct {
-	OverlayId string `json:"overlay-id"`
-	Title     string `json:"title"`
-	Type      string `json:"type"`
-	SubType   string `json:"sub-type"`
-	OwnerId   string `json:"owner-id"`
-	//Expires     int           `json:"expires"`
+	OverlayId   string        `json:"overlay-id"`
+	Title       string        `json:"title"`
+	Type        string        `json:"type"`
+	SubType     string        `json:"sub-type"`
+	OwnerId     string        `json:"owner-id"`
 	Status      OverlayStatus `json:"status"`
 	Description *string       `json:"description,omitempty"`
 	Auth        OverlayAuth   `json:"auth"`
@@ -319,9 +319,9 @@ type HybridOverlayReportOverlay struct {
 }
 
 type HybridOverlayReportPeer struct {
-	PeerId     string   `json:"peer-id"`
-	InstanceId int64    `json:"instance-id"`
-	Auth       PeerAuth `json:"auth"`
+	PeerId string `json:"peer-id"`
+	//InstanceId int64    `json:"instance-id"`
+	Auth PeerAuth `json:"auth"`
 }
 
 type HybridOverlayReport struct {
@@ -340,11 +340,11 @@ type HybridOverlayRefreshOverlay struct {
 }
 
 type HybridOverlayRefreshPeer struct {
-	PeerId     string   `json:"peer-id"`
-	InstanceId int64    `json:"instance-id"`
-	Address    string   `json:"address"`
-	Auth       PeerAuth `json:"auth"`
-	Expires    *int     `json:"expires,omitempty"`
+	PeerId string `json:"peer-id"`
+	//InstanceId int64    `json:"instance-id"`
+	Address string   `json:"address"`
+	Auth    PeerAuth `json:"auth"`
+	Expires *int     `json:"expires,omitempty"`
 }
 
 type HybridOverlayRefresh struct {
@@ -353,9 +353,9 @@ type HybridOverlayRefresh struct {
 }
 
 type HybridOverlayRefreshResponsePeer struct {
-	PeerId     string `json:"peer-id"`
-	InstanceId int64  `json:"instance-id"`
-	Expires    int    `json:"expires"`
+	PeerId string `json:"peer-id"`
+	//InstanceId int64  `json:"instance-id"`
+	Expires int `json:"expires"`
 }
 
 type HybridOverlayRefreshResponse struct {
@@ -386,9 +386,9 @@ type HybridOverlayLeaveOverlay struct {
 }
 
 type HybridOverlayLeavePeer struct {
-	PeerId     string    `json:"peer-id"`
-	InstanceId int64     `json:"instance-id"`
-	Auth       *PeerAuth `json:"auth,omitempty"`
+	PeerId string `json:"peer-id"`
+	//InstanceId int64     `json:"instance-id"`
+	Auth *PeerAuth `json:"auth,omitempty"`
 }
 
 type HybridOverlayLeave struct {
@@ -497,8 +497,8 @@ const (
 )
 
 type HelloPeer struct {
-	ReqCode   int                `json:"ReqCode"`
-	ReqParams HelloPeerReqParams `json:"ReqParams"`
+	ReqCode   int                `json:"req-code"`
+	ReqParams HelloPeerReqParams `json:"req-params"`
 }
 
 type HelloPeerReqParams struct {
@@ -507,10 +507,11 @@ type HelloPeerReqParams struct {
 }
 
 type HelloPeerReqParamsOperation struct {
-	OverlayId string `json:"overlay-id"`
-	ConnNum   int    `json:"conn_num"`
-	Ttl       int    `json:"ttl"`
-	Recovery  *bool  `json:"recovery,omitempty"`
+	OverlayId         string `json:"overlay-id"`
+	ConnNum           int    `json:"conn_num"`
+	Ttl               int    `json:"ttl"`
+	Recovery          *bool  `json:"recovery,omitempty"`
+	VerticalCandidate *bool  `json:"vertical-candidate,omitempty"`
 }
 
 type HelloPeerReqParamsPeer struct {
@@ -520,17 +521,18 @@ type HelloPeerReqParamsPeer struct {
 }
 
 type HelloPeerResponse struct {
-	RspCode int `json:"RspCode"`
+	RspCode int `json:"rsp-code"`
 }
 
 type EstabPeer struct {
-	ReqCode   int                `json:"ReqCode"`
-	ReqParams EstabPeerReqParams `json:"ReqParams"`
+	ReqCode   int                `json:"req-code"`
+	ReqParams EstabPeerReqParams `json:"req-params"`
 }
 
 type EstabPeerReqParams struct {
-	Operation EstabPeerReqParamsOperation `json:"operation"`
-	Peer      EstabPeerReqParamsPeer      `json:"peer"`
+	Operation       EstabPeerReqParamsOperation `json:"operation"`
+	AllowPrimaryReq bool                        `json:"allow-primary-req"`
+	Peer            EstabPeerReqParamsPeer      `json:"peer"`
 }
 
 type EstabPeerReqParamsOperation struct {
@@ -543,7 +545,7 @@ type EstabPeerReqParamsPeer struct {
 }
 
 type EstabPeerResponse struct {
-	RspCode int `json:"RspCode"`
+	RspCode int `json:"rsp-code"`
 }
 
 type ProbePeerReqParamsOperation struct {
@@ -555,18 +557,18 @@ type ProbePeerReqParams struct {
 }
 
 type ProbePeerRequest struct {
-	ReqCode   int                `json:"ReqCode"`
-	ReqParams ProbePeerReqParams `json:"ReqParams"`
+	ReqCode   int                `json:"req-code"`
+	ReqParams ProbePeerReqParams `json:"req-params"`
 }
 
 type ProbePeerResponse struct {
-	RspCode   int                `json:"RspCode"`
-	RspParams ProbePeerReqParams `json:"RspParams"`
+	RspCode   int                `json:"rsp-code"`
+	RspParams ProbePeerReqParams `json:"rsp-params"`
 }
 
 type PrimaryPeer struct {
-	ReqCode   int               `json:"ReqCode"`
-	ReqParams PrimaryPeerParams `json:"ReqParams"`
+	ReqCode   int               `json:"req-code"`
+	ReqParams PrimaryPeerParams `json:"req-params"`
 }
 
 type PrimaryPeerParams struct {
@@ -596,16 +598,26 @@ type CachingBuffer struct {
 }
 
 type PrimaryPeerResponse struct {
-	RspCode   int               `json:"RspCode"`
-	RspParams PrimaryPeerParams `json:"RspParams"`
+	RspCode   int                       `json:"rsp-code"`
+	RspParams PrimaryPeerResponseParams `json:"rsp-params"`
+}
+
+type PrimaryPeerResponseParams struct {
+	Buffermap  *[]*PeerBuffermap `json:"buffermap,omitempty"`
+	ParentPeer *ParentPeer       `json:"parent-peer,omitempty"`
+}
+
+type ParentPeer struct {
+	PeerId  string `json:"peer-id"`
+	Address string `json:"address"`
 }
 
 type CandidatePeer struct {
-	ReqCode int `json:"ReqCode"`
+	ReqCode int `json:"req-code"`
 }
 
 type CandidatePeerResponse struct {
-	RspCode int `json:"RspCode"`
+	RspCode int `json:"rsp-code"`
 }
 
 type ReleasePeerParamsOperation struct {
@@ -617,25 +629,25 @@ type ReleasePeerParams struct {
 }
 
 type ReleasePeer struct {
-	ReqCode   int               `json:"ReqCode"`
-	ReqParams ReleasePeerParams `json:"ReqParams"`
+	ReqCode   int               `json:"req-code"`
+	ReqParams ReleasePeerParams `json:"req-params"`
 }
 
 type ReleasePeerResponse struct {
-	RspCode int `json:"RspCode"`
+	RspCode int `json:"rsp-code"`
 }
 
 type HeartBeat struct {
-	ReqCode int `json:"ReqCode"`
+	ReqCode int `json:"req-code"`
 }
 
 type HeartBeatResponse struct {
-	RspCode int `json:"RspCode"`
+	RspCode int `json:"rsp-code"`
 }
 
 type ScanTree struct {
-	ReqCode   int            `json:"ReqCode"`
-	ReqParams ScanTreeParams `json:"ReqParams"`
+	ReqCode   int            `json:"req-code"`
+	ReqParams ScanTreeParams `json:"req-params"`
 }
 
 type ScanTreeParams struct {
@@ -657,13 +669,13 @@ type ScanTreePeer struct {
 }
 
 type ScanTreeResponse struct {
-	RspCode   int            `json:"RspCode"`
-	RspParams ScanTreeParams `json:"RspParams"`
+	RspCode   int            `json:"rsp-code"`
+	RspParams ScanTreeParams `json:"rsp-params"`
 }
 
 type Buffermap struct {
-	ReqCode   int             `json:"ReqCode"`
-	ReqParams BuffermapParams `json:"ReqParams"`
+	ReqCode   int             `json:"req-code"`
+	ReqParams BuffermapParams `json:"req-params"`
 }
 
 type BuffermapParams struct {
@@ -671,8 +683,8 @@ type BuffermapParams struct {
 }
 
 type BuffermapResponse struct {
-	RspCode   int                `json:"RspCode"`
-	RspParams BuffermapRspParams `json:"RspParams"`
+	RspCode   int                `json:"rsp-code"`
+	RspParams BuffermapRspParams `json:"rsp-params"`
 }
 
 type BuffermapRspParams struct {
@@ -681,15 +693,15 @@ type BuffermapRspParams struct {
 }
 
 type GetData struct {
-	ReqCode   int    `json:"ReqCode"`
+	ReqCode   int    `json:"req-code"`
 	OverlayId string `json:"overlay-id"`
 	SourceId  string `json:"source-id"`
 	Sequence  int    `json:"sequence"`
 }
 
 type GetDataResponse struct {
-	RspCode   int              `json:"RspCode"`
-	RspParams GetDataRspParams `json:"RspParams"`
+	RspCode   int              `json:"rsp-code"`
+	RspParams GetDataRspParams `json:"rsp-params"`
 }
 
 type GetDataRspParams struct {
@@ -704,8 +716,8 @@ type GetDataRspParamsPeer struct {
 }
 
 type BroadcastData struct {
-	ReqCode   int                 `json:"ReqCode"`
-	ReqParams BroadcastDataParams `json:"ReqParams"`
+	ReqCode   int                 `json:"req-code"`
+	ReqParams BroadcastDataParams `json:"req-params"`
 }
 
 type BroadcastDataParams struct {
@@ -716,7 +728,8 @@ type BroadcastDataParams struct {
 }
 
 type BroadcastDataParamsOperation struct {
-	Ack bool `json:"ack"`
+	Ack           bool `json:"ack"`
+	CandidatePath bool `json:"candidate-path"`
 }
 
 type BroadcastDataParamsPeer struct {
@@ -730,7 +743,7 @@ type BroadcastDataParamsPayload struct {
 }
 
 type BroadcastDataResponse struct {
-	RspCode int `json:"RspCode"`
+	RspCode int `json:"rsp-code"`
 }
 
 type BroadcastDataExtensionHeader struct {

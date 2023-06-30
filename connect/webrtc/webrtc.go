@@ -32,10 +32,16 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	pwebrtc "github.com/pion/webrtc/v3"
 )
+
+type ProbePeer struct {
+	Peer           *Peer
+	ProbeTimeMilli int64
+}
 
 type WebrtcConnect struct {
 	connect.Common
@@ -46,7 +52,11 @@ type WebrtcConnect struct {
 
 	position connect.PeerPosition
 
-	peerMap map[string]*Peer
+	peerMap                map[string]*Peer
+	peerDataSeqMap         map[string]int
+	outGoingCandidateSlice []ProbePeer
+
+	outGoingCandidateSliceMux sync.Mutex
 
 	currentScanTreeCSeq int
 	broadcastDataSeq    int
@@ -60,14 +70,16 @@ func (self *WebrtcConnect) PeerInfo() *connect.PeerInfo {
 	return &self.Common.PeerInfo
 }
 
-func (self *WebrtcConnect) Init(peerId string, instanceId int64) {
-	self.CommonInit(peerId, instanceId)
+func (self *WebrtcConnect) Init(peerId string) {
+	self.CommonInit(peerId)
 
 	self.recvChan = make(chan interface{})
 	self.sendChan = make(chan interface{})
 	self.broadcastChan = make(chan interface{})
 
 	self.peerMap = make(map[string]*Peer)
+	self.peerDataSeqMap = make(map[string]int)
+	self.outGoingCandidateSlice = make([]ProbePeer, 0)
 
 	//self.Common.PeerAddress = self.ClientConfig.SignalingServerAddr
 	self.Common.PeerInfo.Address = self.ClientConfig.SignalingServerAddr
@@ -137,7 +149,7 @@ func (self *WebrtcConnect) OnTrack(toPeerId string, kind string, track *pwebrtc.
 
 		for _, peer := range *peerlist {
 
-			if peer.ToPeerInstanceId == toPeerId {
+			if peer.ToPeerId == toPeerId {
 				continue
 			}
 
@@ -160,7 +172,7 @@ func (self *WebrtcConnect) OnTrack(toPeerId string, kind string, track *pwebrtc.
 		for _, peer := range *peerlist {
 			logger.Println(logger.INFO, peer.ToPeerId, "search peer!!!!!!!!")
 
-			if peer.ToPeerInstanceId == toPeerId {
+			if peer.ToPeerId == toPeerId {
 				continue
 			}
 
@@ -169,7 +181,7 @@ func (self *WebrtcConnect) OnTrack(toPeerId string, kind string, track *pwebrtc.
 			}
 
 			if peer.MediaReceive {
-				logger.Println(logger.INFO, peer.ToPeerInstanceId, "Reoffer!!!!!!!!")
+				logger.Println(logger.INFO, peer.ToPeerId, "Reoffer!!!!!!!!")
 				peer.MediaReceive = false
 
 				peer.peerConnection.AddTrack(self.VideoTrack)
@@ -180,7 +192,7 @@ func (self *WebrtcConnect) OnTrack(toPeerId string, kind string, track *pwebrtc.
 		}
 
 		if !successReOffer && OGPrimaryPeer != nil {
-			logger.Println(logger.INFO, OGPrimaryPeer.ToPeerInstanceId, "Reoffer OGP!!!!!!!!")
+			logger.Println(logger.INFO, OGPrimaryPeer.ToPeerId, "Reoffer OGP!!!!!!!!")
 			OGPrimaryPeer.MediaReceive = false
 
 			OGPrimaryPeer.peerConnection.AddTrack(self.VideoTrack)
@@ -199,6 +211,11 @@ func (self *WebrtcConnect) broadcastHello(hello *connect.HelloPeer) {
 
 	//logger.Println(logger.INFO, hello.ReqParams.Peer.PeerId, "NumPrimary:", self.PeerStatus.NumPrimary, ", MaxPrimaryConnection:", self.PeerConfig.MaxPrimaryConnection)
 	//logger.Println(logger.INFO, hello.ReqParams.Peer.PeerId, "NumOutCandidate:", self.PeerStatus.NumOutCandidate, ", MaxOutgoingCandidate:", self.PeerConfig.MaxOutgoingCandidate)
+
+	/*
+		if hello.ReqParams.Operation.VerticalCandidate != nil && *hello.ReqParams.Operation.VerticalCandidate {
+			estab = true
+		}*/
 
 	if self.PeerStatus.NumPrimary < self.PeerConfig.MaxPrimaryConnection ||
 		self.PeerStatus.NumInCandidate < self.PeerConfig.MaxIncomingCandidate {
@@ -219,7 +236,7 @@ func (self *WebrtcConnect) broadcastHello(hello *connect.HelloPeer) {
 			logger.Println(logger.INFO, "after connNum:", hello.ReqParams.Operation.ConnNum)
 
 			for _, peer := range *peerlist {
-				if peer.ToPeerInstanceId == hello.ReqParams.Peer.PeerId {
+				if peer.ToPeerId == hello.ReqParams.Peer.PeerId {
 					continue
 				}
 
@@ -244,8 +261,7 @@ func (self *WebrtcConnect) broadcastHello(hello *connect.HelloPeer) {
 			}
 
 			self.CommunicationMux.Lock()
-
-			if conPeer.SendEstab() {
+			if conPeer.SendEstab(hello.ReqParams.Operation.VerticalCandidate == nil || !*hello.ReqParams.Operation.VerticalCandidate) {
 				self.PeerStatus.NumInCandidate-- // double count in addConnectionInfo
 				conPeer.AddConnectionInfo(connect.InComingCandidate)
 				conPeer.CheckHeartBeatRecved()
@@ -280,7 +296,7 @@ func (self *WebrtcConnect) websocketHello() {
 		PeerId string `json:"peer-id"`
 	}{
 		"hello",
-		self.PeerInstanceId(),
+		self.PeerId(),
 	}
 
 	self.sendChan <- hello
@@ -292,7 +308,7 @@ func (self *WebrtcConnect) websocketBye() {
 		PeerId string `json:"peer-id"`
 	}{
 		"bye",
-		self.PeerInstanceId(),
+		self.PeerId(),
 	}
 
 	self.sendChan <- hello
@@ -308,6 +324,19 @@ func (self *WebrtcConnect) inComingPrimary() *[]*Peer {
 	}
 	self.PeerMapMux.Unlock()
 	return plist
+}
+
+func (self *WebrtcConnect) outGoingPrimary() *Peer {
+	defer self.PeerMapMux.Unlock()
+
+	self.PeerMapMux.Lock()
+	for _, peer := range self.peerMap {
+		if peer.Position == connect.OutGoingPrimary {
+			return peer
+		}
+	}
+
+	return nil
 }
 
 func (self *WebrtcConnect) allPrimary() *[]*Peer {
@@ -334,6 +363,32 @@ func (self *WebrtcConnect) outGoingCandidate() *[]*Peer {
 	return plist
 }
 
+func (self *WebrtcConnect) allPeer() *[]*Peer {
+	plist := new([]*Peer)
+	self.PeerMapMux.Lock()
+	for _, peer := range self.peerMap {
+		*plist = append(*plist, peer)
+	}
+	self.PeerMapMux.Unlock()
+	return plist
+}
+
+func (self *WebrtcConnect) lowestOutGoingCandidate() *Peer {
+	var lowestPeer *Peer = nil
+
+	self.PeerMapMux.Lock()
+	for _, peer := range self.peerMap {
+		if peer.Position == connect.OutGoingCandidate {
+			if lowestPeer == nil || peer.ToTicketId > lowestPeer.ToTicketId {
+				lowestPeer = peer
+			}
+		}
+	}
+	self.PeerMapMux.Unlock()
+
+	return lowestPeer
+}
+
 func (self *WebrtcConnect) signalSend() {
 	for {
 		select {
@@ -343,12 +398,12 @@ func (self *WebrtcConnect) signalSend() {
 			switch send.(type) {
 			case connect.RTCSessionDescription:
 				sdp := send.(connect.RTCSessionDescription)
-				sdp.Fromid = self.PeerInstanceId()
+				sdp.Fromid = self.PeerId()
 				obj = sdp
 				logger.Println(logger.WORK, "send", sdp.Type, "to", sdp.Toid)
 			case connect.RTCIceCandidate:
 				ice := send.(connect.RTCIceCandidate)
-				ice.Fromid = self.PeerInstanceId()
+				ice.Fromid = self.PeerId()
 				obj = ice
 			default:
 				obj = send
@@ -373,7 +428,7 @@ func (self *WebrtcConnect) signalReceive() {
 				sdp := recv.(connect.RTCSessionDescription)
 				//fmt.Println(sdp)
 
-				if sdp.Toid == self.PeerInstanceId() {
+				if sdp.Toid == self.PeerId() {
 
 					self.PeerMapMux.Lock()
 					peer, ok := self.peerMap[sdp.Fromid]
@@ -395,7 +450,7 @@ func (self *WebrtcConnect) signalReceive() {
 									self.newPeerReceiveOffer(sdp)
 
 								} else {
-									logger.Println(logger.WORK, sdp.Fromid, "Already connect. ignore.")
+									logger.Println(logger.WORK, sdp.Fromid, "Already connect. ignore. position:", peer.Position)
 								}
 							} else {
 								peer.ReceiveOffer(sdp)
@@ -416,7 +471,7 @@ func (self *WebrtcConnect) signalReceive() {
 				ice := recv.(connect.RTCIceCandidate)
 				//fmt.Println(ice)
 
-				if ice.Toid == self.PeerInstanceId() {
+				if ice.Toid == self.PeerId() {
 					peer, ok := self.peerMap[ice.Fromid]
 
 					if ok {
@@ -459,14 +514,8 @@ func (self *WebrtcConnect) probePeers() {
 
 	<-time.After(time.Second * time.Duration(self.PeerConfig.ProbePeerTimeout))
 
-	// TODO probe check
-
-	type ProbePeer struct {
-		Peer           *Peer
-		ProbeTimeMilli int64
-	}
-
-	pbPeers := make([]ProbePeer, 0)
+	self.outGoingCandidateSliceMux.Lock()
+	self.outGoingCandidateSlice = make([]ProbePeer, 0)
 
 	self.PeerMapMux.Lock()
 	for _, peer := range self.peerMap {
@@ -475,19 +524,21 @@ func (self *WebrtcConnect) probePeers() {
 				pbPeer := ProbePeer{}
 				pbPeer.Peer = peer
 				pbPeer.ProbeTimeMilli = *peer.probeTime
-				pbPeers = append(pbPeers, pbPeer)
+				self.outGoingCandidateSlice = append(self.outGoingCandidateSlice, pbPeer)
 			}
 		}
 	}
 	self.PeerMapMux.Unlock()
 
-	sort.Slice(pbPeers, func(i, j int) bool {
-		return pbPeers[i].ProbeTimeMilli < pbPeers[j].ProbeTimeMilli
+	sort.Slice(self.outGoingCandidateSlice, func(i, j int) bool {
+		return self.outGoingCandidateSlice[i].ProbeTimeMilli < self.outGoingCandidateSlice[j].ProbeTimeMilli
 	})
 
-	for _, pbPeer := range pbPeers {
+	for _, pbPeer := range self.outGoingCandidateSlice {
 		pbPeer.Peer.TryPrimary()
 	}
+
+	self.outGoingCandidateSliceMux.Unlock()
 }
 
 func (self *WebrtcConnect) ConnectPeers(recovery bool) {
@@ -534,48 +585,27 @@ func (self *WebrtcConnect) ConnectPeers(recovery bool) {
 
 			self.position = connect.SendHello
 
-			conPeer, conn := self.ConnectTo(peer.PeerId+";"+strconv.FormatInt(peer.InstanceId, 10), connect.SendHello)
+			conPeer, conn := self.ConnectTo(peer.PeerId, connect.SendHello)
 
 			if !conn {
 				if conPeer != nil && conPeer.Position == connect.OutGoingCandidate {
 					if conPeer.setPrimary() {
-						logger.Println(logger.INFO, "Success primary with", conPeer.ToPeerInstanceId)
+						logger.Println(logger.INFO, "Success primary with", conPeer.ToPeerId)
 						break
 					}
 				}
-				logger.Println(logger.INFO, "Failed primary with", conPeer.ToPeerInstanceId)
+				logger.Println(logger.INFO, "Failed primary with", conPeer.ToPeerId)
 				continue
 			}
 
 			if !conPeer.sendHello() {
-				logger.Println(logger.ERROR, conPeer.ToPeerInstanceId, "Failed to send hello")
+				logger.Println(logger.ERROR, conPeer.ToPeerId, "Failed to send hello")
 				self.DisconnectFrom(conPeer)
 				continue
 			}
 
 			self.DisconnectFrom(conPeer)
-
-			/*
-				<-time.After(time.Second * time.Duration(self.PeerConfig.PeerEstabTimeout))
-
-				if self.PeerConfig.ProbePeerTimeout > 0 {
-					if logger.LEVEL >= logger.INFO {
-						for pid, peer := range self.peerMap {
-							logger.Println(logger.INFO, pid, " positon: ", peer.Position)
-						}
-					}
-
-					self.probePeers()
-
-					//TODO probe after retry next
-				} //else {
-				if self.HaveOutGoingPrimary {
-					logger.Println(logger.INFO, "Success to make primary")
-					break
-				} else {
-					logger.Println(logger.INFO, "Failed to make primary. Try connect to next peer.")
-				}
-				//}*/
+			break
 		}
 
 		<-time.After(time.Second * time.Duration(self.PeerConfig.PeerEstabTimeout))
@@ -607,17 +637,45 @@ func (self *WebrtcConnect) ConnectPeers(recovery bool) {
 	}
 }
 
-func (self *WebrtcConnect) ConnectTo(toPeerInstanceId string, positon connect.PeerPosition) (*Peer, bool) {
-	logger.Println(logger.WORK, "Try connect to", toPeerInstanceId)
+func (self *WebrtcConnect) sendVerticalHello(toPeerId string) {
+	<-time.After(time.Second * 4)
+
+	logger.Println(logger.WORK, "start sendVerticalHello to", toPeerId)
+
+	peer, ok := self.ConnectTo(toPeerId, connect.SendHello)
+
+	if ok {
+		if peer.sendVerticalHello() {
+			logger.Println(logger.WORK, "Success to send vertical-hello")
+		} else {
+			logger.Println(logger.WORK, "Failed to send vertical-hello")
+		}
+
+		self.DisconnectFrom(peer)
+	} else if peer != nil {
+		logger.Println(logger.INFO, "connect position:", peer.Position)
+
+		if peer.Position != connect.OutGoingCandidate && peer.Position != connect.OutGoingPrimary {
+			logger.Println(logger.WORK, "retry after 5sec - sendVerticalHello to", toPeerId)
+			<-time.After(time.Second * 5)
+			self.sendVerticalHello(toPeerId)
+		} else if peer.Position == connect.OutGoingCandidate {
+			peer.isVerticalCandidate = true
+		}
+	}
+}
+
+func (self *WebrtcConnect) ConnectTo(toPeerId string, positon connect.PeerPosition) (*Peer, bool) {
+	logger.Println(logger.WORK, "Try connect to", toPeerId)
 	self.PeerMapMux.Lock()
 
-	old, ok := self.peerMap[toPeerInstanceId]
+	old, ok := self.peerMap[toPeerId]
 
 	var rslt bool = false
 	var peer *Peer = nil
 
 	if ok {
-		logger.Println(logger.WORK, "Already connect to", toPeerInstanceId)
+		logger.Println(logger.WORK, "Already connect to", toPeerId, "position:", old.Position)
 		peer = old
 		self.PeerMapMux.Unlock()
 	} else {
@@ -626,9 +684,9 @@ func (self *WebrtcConnect) ConnectTo(toPeerInstanceId string, positon connect.Pe
 		&self.sendChan, &connectChan, &self.broadcastChan, self.DisconnectFrom, self.OnTrack,
 		self.RecvScanTree, self.RecvScanTreeResponse, self.recvChat, self.BroadcastData, self.GetBuffermap)*/
 
-		peer = NewPeer(toPeerInstanceId, positon, &connectChan, self)
+		peer = NewPeer(toPeerId, positon, &connectChan, self)
 
-		self.peerMap[toPeerInstanceId] = peer
+		self.peerMap[toPeerId] = peer
 		self.PeerMapMux.Unlock()
 
 		peer.CreateOffer()
@@ -646,9 +704,9 @@ func (self *WebrtcConnect) DisconnectFrom(peer *Peer) {
 
 	self.PeerMapMux.Lock()
 
-	logger.Println(logger.WORK, "Disconnect from", peer.ToPeerInstanceId)
+	logger.Println(logger.WORK, "Disconnect from", peer.ToPeerId)
 
-	delete(self.peerMap, peer.ToPeerInstanceId)
+	delete(self.peerMap, peer.ToPeerId)
 
 	/*self.CachingBufferMapMutex.Lock()
 	delete(self.CachingBufferMap, peer.ToPeerId)
@@ -678,6 +736,19 @@ func (self *WebrtcConnect) Recovery() {
 
 	if len(*plist) > 0 {
 		for _, peer := range *plist {
+			if peer.isVerticalCandidate {
+				if peer.setPrimary() {
+					return
+				}
+				break
+			}
+		}
+
+		for _, peer := range *plist {
+			if peer.isVerticalCandidate {
+				continue
+			}
+
 			if peer.setPrimary() {
 				break
 			}
@@ -733,7 +804,7 @@ func (self *WebrtcConnect) RecvScanTree(req *connect.ScanTree, peer *Peer) {
 
 		//peers = self.allPrimary()
 		for _, primary := range *peers {
-			if peer.ToPeerInstanceId != primary.ToPeerInstanceId {
+			if peer.ToPeerId != primary.ToPeerId {
 				primary.broadcastScanTree(req)
 			}
 		}
@@ -764,7 +835,7 @@ func (self *WebrtcConnect) RecvScanTreeResponse(res *connect.ScanTreeResponse) {
 		res.RspParams.Overlay.Path = path
 
 		for _, peer := range self.peerMap {
-			logger.Println(logger.INFO, "~~~~~~~~~~~ topeer:", peer.ToPeerInstanceId)
+			logger.Println(logger.INFO, "~~~~~~~~~~~ topeer:", peer.ToPeerId)
 			//if strings.Compare(peer.ToPeerId, res.RspParams.Overlay.Via[0][0]) == 0 {
 			if peer.ToPeerId == res.RspParams.Overlay.Via[0][0] {
 				logger.Println(logger.INFO, "~!!!!!!!!!!!!! send scan rel peer:", peer.ToPeerId)
@@ -780,12 +851,29 @@ func (self *WebrtcConnect) getBroadcastDataSeq() int {
 	return self.broadcastDataSeq
 }
 
-func (self *WebrtcConnect) SendData(data *[]byte, appId string) {
+func (self *WebrtcConnect) checkBroadcastDataSeq(peerId string, recvSeq int) bool {
+	seq, ok := self.peerDataSeqMap[peerId]
+
+	self.peerDataSeqMap[peerId] = recvSeq
+
+	if ok {
+		if recvSeq > seq {
+			return true
+		} else {
+			return false
+		}
+	} else {
+		return true
+	}
+}
+
+func (self *WebrtcConnect) SendData(data *[]byte, appId string, candidatePath bool) {
 
 	req := connect.BroadcastData{}
 	req.ReqCode = connect.ReqCode_BroadcastData
 	req.ReqParams.Operation = &connect.BroadcastDataParamsOperation{}
 	req.ReqParams.Operation.Ack = self.PeerConfig.BroadcastOperationAck
+	req.ReqParams.Operation.CandidatePath = candidatePath
 	req.ReqParams.Peer.PeerId = self.PeerId()
 	req.ReqParams.Peer.Sequence = self.getBroadcastDataSeq()
 	req.ReqParams.Payload.Length = len(*data)
@@ -845,7 +933,7 @@ func (self *WebrtcConnect) IoTData(data *connect.IoTData) {
 	if err != nil {
 		logger.Println(logger.ERROR, "IOT Data to string error:", err)
 	} else {
-		self.SendData(&appdata, data.AppId)
+		self.SendData(&appdata, data.AppId, false)
 		self.RecvIoTCallback(string(appdata))
 	}
 }
@@ -860,7 +948,7 @@ func (self *WebrtcConnect) BlockChainData(data *connect.BlockChainData) {
 	if err != nil {
 		logger.Println(logger.ERROR, "IOT Data to string error:", err)
 	} else {
-		self.SendData(&appdata, data.AppId)
+		self.SendData(&appdata, data.AppId, false)
 		//self.RecvBlockChainCallback(string(appdata))
 	}
 }
@@ -871,7 +959,7 @@ func (self *WebrtcConnect) MediaData(data *connect.MediaAppData) {
 	self.UDPConnection = true
 	self.AddConnectedAppIds(data.AppId)
 
-	self.SendData(data.AppData, data.AppId)
+	self.SendData(data.AppData, data.AppId, false)
 }
 
 func (self *WebrtcConnect) BroadcastData(params *connect.BroadcastDataParams, data *[]byte, senderId *string, caching bool, includeOGP bool) {
@@ -886,7 +974,20 @@ func (self *WebrtcConnect) BroadcastData(params *connect.BroadcastDataParams, da
 
 	msg := connect.GetPPMessage(req, *data)
 
-	for _, peer := range *self.allPrimary() {
+	var peerlist *[]*Peer = nil
+
+	if params.Operation.CandidatePath {
+		peerlist = self.allPeer()
+	} else {
+		peerlist = self.allPrimary()
+	}
+
+	if peerlist == nil || len(*peerlist) <= 0 {
+		logger.Println(logger.WORK, "No peer to send broadcast data.")
+		return
+	}
+
+	for _, peer := range *peerlist {
 		if senderId != nil && *senderId == peer.ToPeerId {
 			continue
 		}
@@ -895,11 +996,21 @@ func (self *WebrtcConnect) BroadcastData(params *connect.BroadcastDataParams, da
 			continue
 		}
 
-		if peer.Position == connect.OutGoingPrimary && !includeOGP {
+		if peer.Position >= connect.InComingCandidate && peer.Position <= connect.OutGoingPrimary {
+			if peer.Position == connect.OutGoingPrimary && !includeOGP {
+				continue
+			}
+
+			if peer.Position == connect.InComingCandidate || peer.Position == connect.OutGoingCandidate {
+				if !params.Operation.CandidatePath {
+					continue
+				}
+			}
+		} else {
 			continue
 		}
 
-		logger.Println(logger.WORK, peer.ToPeerInstanceId, "send broadcastdata:", req)
+		logger.Println(logger.WORK, peer.ToPeerId, "send broadcastdata:", req)
 		peer.sendPPMessage(msg)
 	}
 }
@@ -1138,7 +1249,7 @@ func (self *WebrtcConnect) recoveryDataForPull() {
 				primaryBufmap = pb
 			}
 		case <-time.After(time.Second * 5):
-			logger.Println(logger.ERROR, peer.ToPeerInstanceId, "Recv Buffermap response timeout!")
+			logger.Println(logger.ERROR, peer.ToPeerId, "Recv Buffermap response timeout!")
 			continue
 		}
 	}

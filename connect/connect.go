@@ -29,7 +29,7 @@ import (
 	"encoding/json"
 	"logger"
 	"math/rand"
-	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,15 +51,42 @@ const (
 	Stable
 )
 
+func (p PeerPosition) String() string {
+	switch p {
+	case Init:
+		return "Init"
+	case InComing:
+		return "InComing"
+	case OutGoing:
+		return "OutGoing"
+	case SendHello:
+		return "SendHello"
+	case Established:
+		return "Established"
+	case InComingCandidate:
+		return "InComingCandidate"
+	case OutGoingCandidate:
+		return "OutGoingCandidate"
+	case InComingPrimary:
+		return "InComingPrimary"
+	case OutGoingPrimary:
+		return "OutGoingPrimary"
+	case Stable:
+		return "Stable"
+	default:
+		return "Unknown"
+	}
+}
+
 const (
 	RecoveryByPush string = "push"
 	RecoveryByPull string = "pull"
 )
 
 type Connect interface {
-	Init(peerId string, instanceId int64)
+	Init(peerId string)
 	PeerId() string
-	PeerInstanceId() string
+	//PeerInstanceId() string
 	//ConnectTo(peerId string, position PeerPosition) (*Peer, bool)
 	ConnectPeers(recovery bool)
 	//BroadcastData(params *BroadcastDataParams, data *[]byte, senderId *string, caching bool, includeOGP bool)
@@ -82,7 +109,7 @@ type Connect interface {
 	Release(done *chan struct{})
 	Recovery()
 	SendScanTree() int
-	SendData(data *[]byte, appId string)
+	SendData(data *[]byte, appId string, candidatePath bool)
 	IsOwner() bool
 	HasConnection() bool
 	ConnectionInfo() *NetworkResponse
@@ -90,7 +117,7 @@ type Connect interface {
 	BlockChainData(data *BlockChainData)
 	MediaData(data *MediaAppData)
 	GetClientConfig() ClientConfig
-	GetPeerInfo() *PeerInfo
+	//GetPeerInfo() *PeerInfo
 	GetPeerConfig() *PeerConfig
 	GetPeerStatus() *PeerStatus
 	GetConnectedAppIds() *[]string
@@ -124,7 +151,7 @@ type Common struct {
 	//PeerAuth     PeerAuth
 	PeerStatus PeerStatus
 
-	peerInstanceId string
+	//peerInstanceId string
 
 	EstabPeerCount      int
 	HaveOutGoingPrimary bool
@@ -159,11 +186,13 @@ type Common struct {
 	UDPConnection bool
 
 	connectedAppIds map[string]bool
+
+	GrandParentId string
 }
 
-func (conn *Common) CommonInit(peerId string, instanceId int64) {
+func (conn *Common) CommonInit(peerId string) {
 	conn.PeerInfo.PeerId = peerId
-	conn.PeerInfo.InstanceId = instanceId
+	//conn.PeerInfo.InstanceId = instanceId
 	conn.ClientConfig = ReadClientConfig()
 	logger.Println(logger.INFO, "client config:", conn.ClientConfig)
 	conn.PeerConfig = ReadPeerConfig()
@@ -192,11 +221,13 @@ func (conn *Common) CommonInit(peerId string, instanceId int64) {
 	conn.UDPConnection = false
 
 	conn.CachingBufferMap = make(map[string]*CachingBuffer)
+
+	conn.GrandParentId = ""
 }
 
-func (conn *Common) GetPeerInfo() *PeerInfo {
+/*func (conn *Common) GetPeerInfo() *PeerInfo {
 	return &conn.PeerInfo
-}
+}*/
 
 func (conn *Common) GetPeerConfig() *PeerConfig {
 	return &conn.PeerConfig
@@ -578,15 +609,26 @@ func (conn *Common) PeerId() string {
 	return conn.PeerInfo.PeerId
 }
 
-func (conn *Common) PeerInstanceId() string {
-	if conn.peerInstanceId == "" {
-		conn.peerInstanceId = conn.PeerInfo.PeerId + ";" + strconv.FormatInt(conn.PeerInfo.InstanceId, 10)
+/*
+	func (conn *Common) PeerInstanceId() string {
+		if conn.peerInstanceId == "" {
+			conn.peerInstanceId = conn.PeerInfo.PeerId + ";" + strconv.FormatInt(conn.PeerInfo.InstanceId, 10)
+		}
+		return conn.peerInstanceId
 	}
-	return conn.peerInstanceId
-}
-
+*/
 func (conn *Common) IsOwner() bool {
-	return conn.OverlayInfo.OwnerId == conn.PeerId()
+	owner := conn.OverlayInfo.OwnerId
+	if strings.Contains(owner, ";") {
+		owner = strings.Split(owner, ";")[0]
+	}
+
+	peer := conn.PeerId()
+	if strings.Contains(peer, ";") {
+		peer = strings.Split(peer, ";")[0]
+	}
+
+	return owner == peer
 }
 
 func (conn *Common) SetPeerId(id string) {
@@ -641,7 +683,7 @@ func (conn *Common) OverlayJoinBy(hoj *HybridOverlayJoin, recovery bool) *Hybrid
 					hor := HybridOverlayRefresh{}
 					hor.Overlay.OverlayId = conn.OverlayInfo.OverlayId
 					hor.Peer.PeerId = conn.PeerId()
-					hor.Peer.InstanceId = conn.PeerInfo.InstanceId
+					//hor.Peer.InstanceId = conn.PeerInfo.InstanceId
 					hor.Peer.Address = conn.PeerInfo.Address
 					hor.Peer.Auth = conn.PeerInfo.Auth
 					conn.HOMP.OverlayRefresh(&hor)
@@ -660,7 +702,7 @@ func (conn *Common) OverlayJoin(recovery bool) *HybridOverlayJoinResponseOverlay
 	hoj.Overlay.SubType = conn.OverlayInfo.SubType
 	hoj.Overlay.Auth = &conn.OverlayInfo.Auth
 	hoj.Peer.PeerId = conn.PeerId()
-	hoj.Peer.InstanceId = conn.PeerInfo.InstanceId
+	//hoj.Peer.InstanceId = conn.PeerInfo.InstanceId
 	hoj.Peer.Address = conn.PeerInfo.Address
 	hoj.Peer.Auth = conn.PeerInfo.Auth
 	hoj.Peer.Expires = &conn.PeerConfig.Expires
@@ -689,7 +731,7 @@ func (conn *Common) OverlayReportBy(overlayId string) *HybridOverlayReportOverla
 	hor := new(HybridOverlayReport)
 	hor.Overlay.OverlayId = overlayId
 	hor.Peer.PeerId = conn.PeerId()
-	hor.Peer.InstanceId = conn.PeerInfo.InstanceId
+	//hor.Peer.InstanceId = conn.PeerInfo.InstanceId
 	hor.Status = conn.PeerStatus
 	hor.Peer.Auth = conn.PeerInfo.Auth
 
@@ -722,7 +764,7 @@ func (conn *Common) OverlayLeaveBy(overlayId string) *HybridOverlayLeaveResponse
 	hol.Overlay.OverlayId = overlayId
 	hol.Overlay.Auth = &conn.OverlayInfo.Auth
 	hol.Peer.PeerId = conn.PeerId()
-	hol.Peer.InstanceId = conn.PeerInfo.InstanceId
+	//hol.Peer.InstanceId = conn.PeerInfo.InstanceId
 	hol.Peer.Auth = &conn.PeerInfo.Auth
 
 	res := conn.HOMP.OverlayLeave(hol)
