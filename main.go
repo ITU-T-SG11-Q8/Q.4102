@@ -30,6 +30,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -164,7 +165,8 @@ func main() {
 	httpServer.Start(*wport)
 
 	var conn connect.Connect = &webrtc.WebrtcConnect{}
-	conn.Init(*peerId, instanceId)
+	var peerInstanceId = *peerId + ";" + strconv.FormatInt(instanceId, 10)
+	conn.Init(peerInstanceId)
 
 	httpServer.SetConnect(&conn)
 

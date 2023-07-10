@@ -43,13 +43,14 @@ import (
 )
 
 type Peer struct {
-	ToPeerId         string
-	ToInstanceId     string
-	ToPeerInstanceId string
-	ToTicketId       int
-	Info             *connect.Common
-	IsOutGoing       bool
-	Position         connect.PeerPosition
+	ToPeerId   string
+	ToOriginId string
+	//ToInstanceId     string
+	//ToPeerInstanceId string
+	ToTicketId int
+	Info       *connect.Common
+	IsOutGoing bool
+	Position   connect.PeerPosition
 
 	signalSend       *chan interface{}
 	ppChan           chan interface{}
@@ -72,18 +73,16 @@ type Peer struct {
 	MediaReceive bool
 
 	probeTime *int64
+
+	isVerticalCandidate bool
 }
 
 func NewPeer(toPeerId string, position connect.PeerPosition, connectChan *chan bool, conn *WebrtcConnect) *Peer {
 	peer := new(Peer)
 
+	peer.ToPeerId = toPeerId
 	if strings.Contains(toPeerId, ";") {
-		slice := strings.Split(toPeerId, ";")
-		peer.ToInstanceId = slice[len(slice)-1]
-		peer.ToPeerId = strings.ReplaceAll(toPeerId, ";"+peer.ToInstanceId, "")
-		peer.ToPeerInstanceId = toPeerId
-	} else {
-		peer.ToPeerId = toPeerId
+		peer.ToOriginId = strings.Split(toPeerId, ";")[0]
 	}
 
 	peer.Position = position
@@ -109,6 +108,8 @@ func NewPeer(toPeerId string, position connect.PeerPosition, connectChan *chan b
 	peer.pendingCandidates = make([]*pwebrtc.ICECandidate, 0)
 
 	peer.peerConnection = nil
+
+	peer.isVerticalCandidate = false
 
 	return peer
 }
@@ -146,10 +147,10 @@ func (self *Peer) InitConnection(position connect.PeerPosition) {
 func (self *Peer) signalCandidate(c *pwebrtc.ICECandidate) error {
 	candi := connect.RTCIceCandidate{}
 	candi.Candidate = c.ToJSON().Candidate
-	candi.Toid = self.ToPeerInstanceId
+	candi.Toid = self.ToPeerId
 	candi.Type = "candidate"
 
-	logger.Println(logger.INFO, "send iceCandidate to", self.ToPeerInstanceId)
+	logger.Println(logger.INFO, "send iceCandidate to", self.ToPeerId)
 	*self.signalSend <- candi
 
 	return nil
@@ -219,7 +220,7 @@ func (self *Peer) newPeerConnection(createDataChannel bool) {
 
 	if createDataChannel {
 		self.peerConnection.OnTrack(func(tr *pwebrtc.TrackRemote, r *pwebrtc.RTPReceiver) {
-			logger.Println(logger.INFO, self.ToPeerInstanceId, "OnTrack!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! create", tr.Kind())
+			logger.Println(logger.INFO, self.ToPeerId, "OnTrack!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! create", tr.Kind())
 			self.setLocalTrack(tr, r)
 		})
 
@@ -230,10 +231,10 @@ func (self *Peer) newPeerConnection(createDataChannel bool) {
 		self.dataChannel = dataChannel
 
 		peerConnection.OnConnectionStateChange(func(s pwebrtc.PeerConnectionState) {
-			logger.Printf(logger.INFO, self.ToPeerInstanceId, "Peer Connection State has changed: %s\n", s.String())
+			logger.Printf(logger.WORK, self.ToPeerId, "Peer Connection State has changed: ", s.String())
 
 			if !self.releasePeer && s >= pwebrtc.PeerConnectionStateFailed {
-				self.Info.DelConnectionInfo(self.Position, self.ToPeerInstanceId)
+				self.Info.DelConnectionInfo(self.Position, self.ToPeerId)
 				self.ConnectObj.DisconnectFrom(self)
 			}
 		})
@@ -247,16 +248,16 @@ func (self *Peer) newPeerConnection(createDataChannel bool) {
 		})
 	} else {
 		self.peerConnection.OnConnectionStateChange(func(s pwebrtc.PeerConnectionState) {
-			logger.Println(logger.WORK, self.ToPeerInstanceId, "Connection State has changed:", s.String())
+			logger.Println(logger.WORK, self.ToPeerId, "Connection State has changed:", s.String())
 
 			if !self.releasePeer && s >= pwebrtc.PeerConnectionStateFailed {
-				self.Info.DelConnectionInfo(self.Position, self.ToPeerInstanceId)
+				self.Info.DelConnectionInfo(self.Position, self.ToPeerId)
 				self.ConnectObj.DisconnectFrom(self)
 			}
 		})
 
 		self.peerConnection.OnTrack(func(tr *pwebrtc.TrackRemote, r *pwebrtc.RTPReceiver) {
-			logger.Println(logger.WORK, self.ToPeerInstanceId, "OnTrack!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", tr.Kind())
+			logger.Println(logger.WORK, self.ToPeerId, "OnTrack!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", tr.Kind())
 
 			self.setLocalTrack(tr, r)
 		})
@@ -300,7 +301,7 @@ func (self *Peer) setLocalTrack(tr *pwebrtc.TrackRemote, r *pwebrtc.RTPReceiver)
 			}
 
 			if rtcpSendErr := self.peerConnection.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(tr.SSRC())}}); rtcpSendErr != nil {
-				logger.Println(logger.ERROR, self.ToPeerInstanceId, "WriteRTCP error:", rtcpSendErr)
+				logger.Println(logger.ERROR, self.ToPeerId, "WriteRTCP error:", rtcpSendErr)
 			}
 		}
 	}()
@@ -320,7 +321,7 @@ func (self *Peer) setLocalTrack(tr *pwebrtc.TrackRemote, r *pwebrtc.RTPReceiver)
 			lTrack = localTrack
 		}
 
-		self.ConnectObj.OnTrack(self.ToPeerInstanceId, "video", lTrack)
+		self.ConnectObj.OnTrack(self.ToPeerId, "video", lTrack)
 	} else {
 		lTrack = self.Info.GetTrack("audio")
 
@@ -332,7 +333,7 @@ func (self *Peer) setLocalTrack(tr *pwebrtc.TrackRemote, r *pwebrtc.RTPReceiver)
 			lTrack = localTrack
 		}
 
-		self.ConnectObj.OnTrack(self.ToPeerInstanceId, "audio", lTrack)
+		self.ConnectObj.OnTrack(self.ToPeerId, "audio", lTrack)
 	}
 
 	rtpBuf := make([]byte, 1400)
@@ -354,7 +355,7 @@ func (self *Peer) setLocalTrack(tr *pwebrtc.TrackRemote, r *pwebrtc.RTPReceiver)
 		i, _, readErr := tr.Read(rtpBuf)
 		//logger.Println(logger.INFO, self.ToPeerId, "!!!!!!!! read end !!!!!!!!", i)
 		if readErr != nil {
-			logger.Println(logger.ERROR, self.ToPeerInstanceId, "localtrack read error:", readErr)
+			logger.Println(logger.ERROR, self.ToPeerId, "localtrack read error:", readErr)
 			continue
 		}
 
@@ -363,7 +364,7 @@ func (self *Peer) setLocalTrack(tr *pwebrtc.TrackRemote, r *pwebrtc.RTPReceiver)
 		// ErrClosedPipe means we don't have any subscribers, this is ok if no peers have connected yet
 		if _, err := lTrack.Write(rtpBuf[:i]); err != nil && !errors.Is(err, io.ErrClosedPipe) {
 			//panic(err)
-			logger.Println(logger.ERROR, self.ToPeerInstanceId, "localtrack write error:", err)
+			logger.Println(logger.ERROR, self.ToPeerId, "localtrack write error:", err)
 			continue
 		}
 	}
@@ -389,7 +390,7 @@ func (self *Peer) OnDataChannelMessage(msg pwebrtc.DataChannelMessage) {
 
 	//logger.Println(logger.INFO, self.ToPeerId, "DataChannel recv :", hstruct)
 
-	if c, ok := hstruct["ReqCode"]; ok {
+	if c, ok := hstruct["req-code"]; ok {
 		code := int(c.(float64))
 
 		switch code {
@@ -450,7 +451,7 @@ func (self *Peer) OnDataChannelMessage(msg pwebrtc.DataChannelMessage) {
 		}
 	}
 
-	if c, ok := hstruct["RspCode"]; ok {
+	if c, ok := hstruct["rsp-code"]; ok {
 		code := int(c.(float64))
 
 		switch code {
@@ -527,11 +528,11 @@ func (self *Peer) CreateOffer() {
 	}
 
 	rsdp := connect.RTCSessionDescription{}
-	rsdp.Toid = self.ToPeerInstanceId
+	rsdp.Toid = self.ToPeerId
 	rsdp.Type = "offer"
 	rsdp.Sdp = offer
 
-	//log.Printf("send offer to %s", self.ToPeerInstanceId)
+	//log.Printf("send offer to %s", self.ToPeerId)
 	*self.signalSend <- rsdp
 }
 
@@ -561,7 +562,7 @@ func (self *Peer) ReceiveOffer(rsdp connect.RTCSessionDescription) {
 
 	ranswer := connect.RTCSessionDescription{}
 	ranswer.Sdp = answer
-	ranswer.Toid = self.ToPeerInstanceId
+	ranswer.Toid = self.ToPeerId
 	ranswer.Type = "answer"
 
 	*self.signalSend <- ranswer
@@ -603,7 +604,7 @@ func (self *Peer) sendPPMessage(msg *connect.PPMessage) error {
 	if self.dataChannel != nil {
 
 		if self.dataChannel.ReadyState() >= pwebrtc.DataChannelStateClosing {
-			logger.Println(logger.ERROR, self.ToPeerInstanceId, "dataChannel closed")
+			logger.Println(logger.ERROR, self.ToPeerId, "dataChannel closed")
 			return fmt.Errorf("dataChannel closed")
 		}
 
@@ -622,7 +623,7 @@ func (self *Peer) sendPPMessage(msg *connect.PPMessage) error {
 		return self.dataChannel.Send(buf)
 	}
 
-	logger.Println(logger.ERROR, self.ToPeerInstanceId, "dataChannel is nil")
+	logger.Println(logger.ERROR, self.ToPeerId, "dataChannel is nil")
 
 	return fmt.Errorf("dataChannel is nil")
 }
@@ -630,7 +631,7 @@ func (self *Peer) sendPPMessage(msg *connect.PPMessage) error {
 func (self *Peer) AddConnectionInfo(position connect.PeerPosition) {
 	self.Position = position
 
-	self.Info.AddConnectionInfo(position, self.ToPeerInstanceId)
+	self.Info.AddConnectionInfo(position, self.ToPeerId)
 }
 
 func (self *Peer) sendHello() bool {
@@ -641,31 +642,82 @@ func (self *Peer) sendHello() bool {
 	hello.ReqParams.Operation.ConnNum = self.Info.PeerConfig.EstabPeerMaxCount //TODO check
 	hello.ReqParams.Operation.Ttl = self.Info.PeerConfig.HelloPeerTTL
 
-	hello.ReqParams.Peer.PeerId = self.Info.PeerInstanceId()
+	hello.ReqParams.Peer.PeerId = self.Info.PeerId()
 	hello.ReqParams.Peer.Address = self.Info.PeerInfo.Address
 	hello.ReqParams.Peer.TicketId = self.Info.PeerInfo.TicketId
 
 	msg := connect.GetPPMessage(&hello, nil)
 	self.sendPPMessage(msg)
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send Hello :", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send Hello :", msg)
+
+	timeout := time.NewTimer(time.Second * 5)
 
 	select {
 	case res := <-self.ppChan:
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+
 		if hres, ok := res.(*connect.HelloPeerResponse); ok {
 			if hres.RspCode != connect.RspCode_Hello {
-				logger.Println(logger.ERROR, self.ToPeerInstanceId, "Wrong response:", res)
+				logger.Println(logger.ERROR, self.ToPeerId, "Wrong response:", res)
 				return false
 			}
 
-			logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv Hello response:", hres)
+			logger.Println(logger.WORK, self.ToPeerId, "Recv Hello response:", hres)
 		} else {
-			logger.Println(logger.ERROR, self.ToPeerInstanceId, "Wrong response:", res)
+			logger.Println(logger.ERROR, self.ToPeerId, "Wrong response:", res)
 			return false
 		}
 
 		return true
 
-	case <-time.After(time.Second * 5):
+	case <-timeout.C:
+		return false
+	}
+}
+
+func (self *Peer) sendVerticalHello() bool {
+	hello := connect.HelloPeer{}
+
+	hello.ReqCode = connect.ReqCode_Hello
+	hello.ReqParams.Operation.OverlayId = self.Info.OverlayInfo.OverlayId
+	hello.ReqParams.Operation.ConnNum = self.Info.PeerConfig.EstabPeerMaxCount
+	hello.ReqParams.Operation.Ttl = 1
+	vc := true
+	hello.ReqParams.Operation.VerticalCandidate = &vc
+
+	hello.ReqParams.Peer.PeerId = self.Info.PeerId()
+	hello.ReqParams.Peer.Address = self.Info.PeerInfo.Address
+	hello.ReqParams.Peer.TicketId = self.Info.PeerInfo.TicketId
+
+	msg := connect.GetPPMessage(&hello, nil)
+	self.sendPPMessage(msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send vertical-hello :", msg)
+
+	timeout := time.NewTimer(time.Second * 5)
+
+	select {
+	case res := <-self.ppChan:
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+
+		if hres, ok := res.(*connect.HelloPeerResponse); ok {
+			if hres.RspCode != connect.RspCode_Hello {
+				logger.Println(logger.ERROR, self.ToPeerId, "Wrong response:", res)
+				return false
+			}
+
+			logger.Println(logger.WORK, self.ToPeerId, "Recv Hello response:", hres)
+		} else {
+			logger.Println(logger.ERROR, self.ToPeerId, "Wrong response:", res)
+			return false
+		}
+
+		return true
+
+	case <-timeout.C:
 		return false
 	}
 }
@@ -673,17 +725,17 @@ func (self *Peer) sendHello() bool {
 func (self *Peer) RelayHello(hello *connect.HelloPeer) bool {
 	msg := connect.GetPPMessage(&hello, nil)
 	self.sendPPMessage(msg)
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send Hello :", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send Hello :", msg)
 
 	select {
 	case res := <-self.ppChan:
 		if hres, ok := res.(*connect.HelloPeerResponse); ok {
-			logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv Hello response:", hres)
+			logger.Println(logger.WORK, self.ToPeerId, "Recv Hello response:", hres)
 			if hres.RspCode != connect.RspCode_Hello {
 				return false
 			}
 		} else {
-			logger.Println(logger.ERROR, self.ToPeerInstanceId, "Wrong response:", res)
+			logger.Println(logger.ERROR, self.ToPeerId, "Wrong response:", res)
 			return false
 		}
 
@@ -695,12 +747,13 @@ func (self *Peer) RelayHello(hello *connect.HelloPeer) bool {
 }
 
 func (self *Peer) recvHello(hello *connect.HelloPeer) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv Hello :", hello)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv Hello :", hello)
 
 	if hello.ReqParams.Peer.TicketId < self.Info.PeerInfo.TicketId {
 		logger.Println(logger.WORK, "TicketId less then mine. ignore.")
 
 		if self.Position == connect.InComing {
+			self.SendRelease()
 			self.ConnectObj.DisconnectFrom(self)
 		}
 
@@ -710,7 +763,10 @@ func (self *Peer) recvHello(hello *connect.HelloPeer) {
 	self.sendHelloResponse()
 	<-time.After(time.Millisecond * 200)
 
+	logger.Println(logger.INFO, self.ToPeerId, "position :", self.Position)
+
 	if self.Position == connect.InComing {
+		self.SendRelease()
 		self.ConnectObj.DisconnectFrom(self)
 	}
 
@@ -721,33 +777,34 @@ func (self *Peer) sendHelloResponse() {
 	hello := connect.HelloPeerResponse{}
 	hello.RspCode = connect.RspCode_Hello
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send Hello resp :", hello)
+	logger.Println(logger.WORK, self.ToPeerId, "Send Hello resp :", hello)
 
 	msg := connect.GetPPMessage(&hello, nil)
 	self.sendPPMessage(msg)
 }
 
 func (self *Peer) recvHelloResponse(res *connect.HelloPeerResponse) bool {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "recvHelloResponse:", res)
+	logger.Println(logger.WORK, self.ToPeerId, "recvHelloResponse:", res)
 	self.ppChan <- res
 	return true
 }
 
-func (self *Peer) SendEstab() bool {
+func (self *Peer) SendEstab(allowPrimary bool) bool {
 	estab := connect.EstabPeer{}
 	estab.ReqCode = connect.ReqCode_Estab
 	estab.ReqParams.Operation.OverlayId = self.Info.OverlayInfo.OverlayId
-	estab.ReqParams.Peer.PeerId = self.Info.PeerInstanceId()
+	estab.ReqParams.Peer.PeerId = self.Info.PeerId()
 	estab.ReqParams.Peer.TicketId = self.Info.PeerInfo.TicketId
+	estab.ReqParams.AllowPrimaryReq = allowPrimary
 
 	msg := connect.GetPPMessage(&estab, nil)
 	self.sendPPMessage(msg)
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send Estab :", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send Estab :", msg)
 
 	select {
 	case res := <-self.ppChan:
 		if hres, ok := res.(*connect.EstabPeerResponse); ok {
-			logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv Estab response:", hres)
+			logger.Println(logger.WORK, self.ToPeerId, "Recv Estab response:", hres)
 			if hres.RspCode != connect.RspCode_Estab_Yes {
 				return false
 			}
@@ -763,20 +820,27 @@ func (self *Peer) SendEstab() bool {
 }
 
 func (self *Peer) recvEstab(estab *connect.EstabPeer) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv Estab :", estab)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv Estab :", estab)
 
 	if self.Info.OverlayInfo.OverlayId != estab.ReqParams.Operation.OverlayId {
-		logger.Println(logger.WORK, self.ToPeerInstanceId, "Estab OverlayId not match")
+		logger.Println(logger.WORK, self.ToPeerId, "Estab OverlayId not match")
 		self.SendEstabResponse(false)
 		self.ConnectObj.DisconnectFrom(self)
 		return
 	}
 
 	self.ToTicketId = estab.ReqParams.Peer.TicketId
+	self.isVerticalCandidate = estab.ReqParams.Peer.PeerId == self.Info.GrandParentId
+
+	logger.Println(logger.INFO, self.ToPeerId, "----------------------------------------------------------------")
+	logger.Println(logger.INFO, self.ToPeerId, "estab.ReqParams.Peer.PeerId:", estab.ReqParams.Peer.PeerId)
+	logger.Println(logger.INFO, self.ToPeerId, "self.Info.GrandParentId:", self.Info.GrandParentId)
+	logger.Println(logger.INFO, self.ToPeerId, "self.isVerticalCandidate:", self.isVerticalCandidate)
+	logger.Println(logger.INFO, self.ToPeerId, "----------------------------------------------------------------")
 
 	if self.Info.PeerConfig.ProbePeerTimeout > 0 {
-		if self.Info.PeerConfig.EstabPeerMaxCount <= self.Info.EstabPeerCount {
-			logger.Println(logger.WORK, self.ToPeerInstanceId, "EstabPeerMaxCount <= EstabPeerCount")
+		if self.Info.PeerConfig.EstabPeerMaxCount <= self.Info.EstabPeerCount && !self.isVerticalCandidate {
+			logger.Println(logger.WORK, self.ToPeerId, "EstabPeerMaxCount <= EstabPeerCount")
 			self.SendEstabResponse(false)
 			self.ConnectObj.DisconnectFrom(self)
 		} else {
@@ -793,7 +857,7 @@ func (self *Peer) recvEstab(estab *connect.EstabPeer) {
 			}
 		} else {
 			self.SendEstabResponse(true)
-			if self.setPrimary() {
+			if estab.ReqParams.AllowPrimaryReq && self.setPrimary() {
 				go self.sendHeartBeat()
 			} else {
 				if self.candidateCheck(false) {
@@ -818,11 +882,28 @@ func (self *Peer) TryPrimary() {
 	}
 }
 
+func (self *Peer) closeLowestOutGoingCandidate() {
+	logger.Println(logger.INFO, "closeLowestOutGoingCandidate!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	peer := self.ConnectObj.lowestOutGoingCandidate()
+	if peer != nil {
+		logger.Println(logger.INFO, "!!!!!!!!!!!!!!!!!!!LowestOutGoingCandidate", peer.ToPeerId)
+		self.Info.DelConnectionInfo(peer.Position, peer.ToPeerId)
+		self.ConnectObj.DisconnectFrom(peer)
+	}
+}
+
 func (self *Peer) candidateCheck(sendres bool) bool {
 	if self.Info.PeerStatus.NumOutCandidate >= self.Info.PeerConfig.MaxOutgoingCandidate {
+		if self.isVerticalCandidate {
+			self.closeLowestOutGoingCandidate()
+			return self.candidateCheck(sendres)
+		}
 		if sendres {
 			self.SendEstabResponse(false)
 		}
+
+		self.SendRelease()
+		<-time.After(time.Second * 1)
 		self.ConnectObj.DisconnectFrom(self)
 
 		return false
@@ -849,7 +930,7 @@ func (self *Peer) SendEstabResponse(ok bool) {
 		res.RspCode = connect.RspCode_Estab_No
 	}
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send Estab resp :", res)
+	logger.Println(logger.WORK, self.ToPeerId, "Send Estab resp :", res)
 
 	msg := connect.GetPPMessage(&res, nil)
 	self.sendPPMessage(msg)
@@ -869,16 +950,22 @@ func (self *Peer) setPrimary() bool {
 
 	msg := connect.GetPPMessage(&primary, nil)
 	self.sendPPMessage(msg)
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Set primary:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Set primary:", msg)
+
+	timeout := time.NewTimer(time.Second * 5)
 
 	select {
 	case res := <-self.ppChan:
+
+		if !timeout.Stop() {
+			<-timeout.C
+		}
 
 		var hres *connect.PrimaryPeerResponse = nil
 		var ok bool
 
 		if hres, ok = res.(*connect.PrimaryPeerResponse); ok {
-			logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv Primary response:", hres)
+			logger.Println(logger.WORK, self.ToPeerId, "Recv Primary response:", hres)
 			if hres.RspCode != connect.RspCode_Primary_Yes {
 				return false
 			}
@@ -896,17 +983,26 @@ func (self *Peer) setPrimary() bool {
 			}
 		}
 
+		if hres.RspParams.ParentPeer != nil {
+			logger.Println(logger.INFO, self.ToPeerId, "Parent peer !!!!!!!!!!!!!")
+			logger.Println(logger.INFO, self.ToPeerId, "--->", hres.RspParams.ParentPeer.PeerId, hres.RspParams.ParentPeer.Address)
+
+			self.Info.GrandParentId = hres.RspParams.ParentPeer.PeerId
+
+			go self.ConnectObj.sendVerticalHello(hres.RspParams.ParentPeer.PeerId)
+		}
+
 		return true
 
-	case <-time.After(time.Second * 5):
-		logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv Primary timeout!!!")
+	case <-timeout.C:
+		logger.Println(logger.WORK, self.ToPeerId, "Recv Primary timeout!!!")
 		return false
 	}
 }
 
 func (self *Peer) recvPrimary(primary *connect.PrimaryPeer) {
 	self.Info.CommunicationMux.Lock()
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv primary :", primary)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv primary :", primary)
 
 	if self.Info.PeerConfig.MaxPrimaryConnection <= self.Info.PeerStatus.NumPrimary {
 		self.Info.CommunicationMux.Unlock()
@@ -961,11 +1057,18 @@ func (self *Peer) sendPrimaryResponse(ok bool) {
 		if self.Info.OverlayInfo.CrPolicy.RecoveryBy == connect.RecoveryByPush {
 			pres.RspParams.Buffermap = self.ConnectObj.GetBuffermap()
 		}
+
+		if self.Info.HaveOutGoingPrimary {
+			parent := self.ConnectObj.outGoingPrimary()
+			pres.RspParams.ParentPeer = new(connect.ParentPeer)
+			pres.RspParams.ParentPeer.PeerId = parent.ToPeerId
+			pres.RspParams.ParentPeer.Address = parent.Info.PeerInfo.Address
+		}
 	} else {
 		pres.RspCode = connect.RspCode_Primary_No
 	}
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send Primary resp :", pres)
+	logger.Println(logger.WORK, self.ToPeerId, "Send Primary resp :", pres)
 
 	msg := connect.GetPPMessage(&pres, nil)
 	self.sendPPMessage(msg)
@@ -982,11 +1085,11 @@ func (self *Peer) setCandidate() {
 	msg := connect.GetPPMessage(&candi, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Set candidate:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Set candidate:", msg)
 }
 
 func (self *Peer) recvCandidate(res *connect.CandidatePeer) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv candidate:", res)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv candidate:", res)
 
 	self.sendCandidateResponse()
 }
@@ -998,11 +1101,11 @@ func (self *Peer) sendCandidateResponse() {
 	msg := connect.GetPPMessage(&candi, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send candidate resp:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send candidate resp:", msg)
 }
 
 func (self *Peer) recvCandidateResponse(res *connect.CandidatePeerResponse) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv candidate resp:", res)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv candidate resp:", res)
 }
 
 func (self *Peer) SendProbe() {
@@ -1013,7 +1116,7 @@ func (self *Peer) SendProbe() {
 	msg := connect.GetPPMessage(&pro, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send probe:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send probe:", msg)
 }
 
 func (self *Peer) recvProbe(req *connect.ProbePeerRequest) {
@@ -1026,22 +1129,22 @@ func (self *Peer) recvProbe(req *connect.ProbePeerRequest) {
 	msg := connect.GetPPMessage(&res, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send probe response:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send probe response:", msg)
 }
 
 func (self *Peer) recvProbeResponse(res *connect.ProbePeerResponse) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv probe response:", res)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv probe response:", res)
 
 	loc, _ := time.LoadLocation("Asia/Seoul")
 	prbtime, err := time.ParseInLocation("2006-01-02 15:04:05.000", res.RspParams.Operation.NtpTime, loc)
 	if err != nil {
-		logger.Println(logger.ERROR, self.ToPeerInstanceId, "probetime parse error:", err)
+		logger.Println(logger.ERROR, self.ToPeerId, "probetime parse error:", err)
 		self.probeTime = nil
 	} else {
 		now := time.Now().In(loc)
 		duration := int64(now.Sub(prbtime) / time.Millisecond)
 		self.probeTime = &duration
-		logger.Println(logger.WORK, self.ToPeerInstanceId, "probe time:", duration, "ms")
+		logger.Println(logger.WORK, self.ToPeerId, "probe time:", duration, "ms")
 	}
 }
 
@@ -1053,17 +1156,17 @@ func (self *Peer) SendRelease() {
 	msg := connect.GetPPMessage(&rel, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send release peer:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send release peer:", msg)
 }
 
 func (self *Peer) recvRelease(req *connect.ReleasePeer) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv release peer:", req)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv release peer:", req)
 
 	if req.ReqParams.Operation.Ack {
 		self.sendReleaseAck()
 	}
 
-	self.Info.DelConnectionInfo(self.Position, self.ToPeerInstanceId)
+	self.Info.DelConnectionInfo(self.Position, self.ToPeerId)
 	self.ConnectObj.DisconnectFrom(self)
 }
 
@@ -1074,11 +1177,11 @@ func (self *Peer) sendReleaseAck() {
 	msg := connect.GetPPMessage(&res, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send release ack:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send release ack:", msg)
 }
 
 func (self *Peer) recvReleaseAck(res *connect.ReleasePeerResponse) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv release ack:", res)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv release ack:", res)
 
 	self.releasePeer = true
 
@@ -1098,11 +1201,11 @@ func (self *Peer) sendHeartBeat() {
 		err := self.sendPPMessage(msg)
 
 		if err != nil {
-			logger.Println(logger.WORK, self.ToPeerInstanceId, "Send heartbeat failed!", err)
-			self.Info.DelConnectionInfo(self.Position, self.ToPeerInstanceId)
+			logger.Println(logger.WORK, self.ToPeerId, "Send heartbeat failed!", err)
+			self.Info.DelConnectionInfo(self.Position, self.ToPeerId)
 			self.ConnectObj.DisconnectFrom(self)
 		} else {
-			//logger.Println(logger.WORK, self.ToPeerInstanceId, "Send heartbeat:", msg)
+			//logger.Println(logger.WORK, self.ToPeerId, "Send heartbeat:", msg)
 		}
 	}
 }
@@ -1117,8 +1220,8 @@ func (self *Peer) CheckHeartBeatRecved() {
 			self.heartbeatCount++
 
 			if self.heartbeatCount > self.Info.OverlayInfo.HeartbeatTimeout {
-				logger.Println(logger.WORK, self.ToPeerInstanceId, "Heartbeat timeout!")
-				self.Info.DelConnectionInfo(self.Position, self.ToPeerInstanceId)
+				logger.Println(logger.WORK, self.ToPeerId, "Heartbeat timeout!")
+				self.Info.DelConnectionInfo(self.Position, self.ToPeerId)
 				self.ConnectObj.DisconnectFrom(self)
 			}
 
@@ -1159,18 +1262,18 @@ func (self *Peer) sendScanTree(cseq int) {
 	msg := connect.GetPPMessage(&req, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send ScanTree:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send ScanTree:", msg)
 }
 
 func (self *Peer) broadcastScanTree(req *connect.ScanTree) {
 	msg := connect.GetPPMessage(req, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Broadcast ScanTree:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Broadcast ScanTree:", msg)
 }
 
 func (self *Peer) recvScanTree(req *connect.ScanTree) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv ScanTree:", req)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv ScanTree:", req)
 
 	self.ConnectObj.RecvScanTree(req, self)
 }
@@ -1179,11 +1282,11 @@ func (self *Peer) sendScanTreeResponse(res *connect.ScanTreeResponse) {
 	msg := connect.GetPPMessage(res, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send ScanTree response:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send ScanTree response:", msg)
 }
 
 func (self *Peer) recvScanTreeResponse(res *connect.ScanTreeResponse) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv ScanTree response:", res)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv ScanTree response:", res)
 
 	if res.RspCode == connect.RspCode_ScanTreeNonLeaf {
 		return
@@ -1216,7 +1319,7 @@ func (self *Peer) recvData(params *connect.GetDataRspParams, data []byte, includ
 		} else if extHeader.AppId == consts.AppIdBlockChain {
 			self.ConnectObj.RecvBlockChainCallback(string(data))
 		} else if extHeader.AppId == consts.AppIdMedia {
-			logger.Println(logger.INFO, self.ToPeerInstanceId, "Recv Media data:", len(data))
+			logger.Println(logger.INFO, self.ToPeerId, "Recv Media data:", len(data))
 			self.ConnectObj.RecvMediaCallback(params.Peer.PeerId, &data)
 		}
 
@@ -1229,18 +1332,23 @@ func (self *Peer) recvData(params *connect.GetDataRspParams, data []byte, includ
 
 		go self.ConnectObj.BroadcastData(&broadcastParams, &data, &self.ToPeerId, true, includeOGP)
 	} else {
-		logger.Println(logger.ERROR, self.ToPeerInstanceId, "Recv data ext-header-len error:", params.ExtHeaderLen)
+		logger.Println(logger.ERROR, self.ToPeerId, "Recv data ext-header-len error:", params.ExtHeaderLen)
 	}
 }
 
 func (self *Peer) recvBroadcastData(req *connect.BroadcastData, data []byte) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv broadcast data:", req)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv broadcast data:", req)
 	//logger.Println(logger.WORK, self.ToPeerId, "Recv broadcast data content:", data)
 
 	params := req.ReqParams
 
 	if params.Operation.Ack {
 		self.sendBroadcastDataResponse()
+	}
+
+	if !self.ConnectObj.checkBroadcastDataSeq(params.Peer.PeerId, params.Peer.Sequence) {
+		logger.Println(logger.WORK, self.ToPeerId, "Already recv broadcast data seq:", params.Peer.PeerId, " - ", params.Peer.Sequence)
+		return
 	}
 
 	if data == nil || len(data) <= 0 {
@@ -1255,29 +1363,29 @@ func (self *Peer) recvBroadcastData(req *connect.BroadcastData, data []byte) {
 		extHeader := connect.BroadcastDataExtensionHeader{}
 		json.Unmarshal(data[:params.ExtHeaderLen], &extHeader)
 
-		data = data[params.ExtHeaderLen:]
+		payload := data[params.ExtHeaderLen:]
 
 		if extHeader.AppId == consts.AppIdChat && params.Payload.PayloadType == consts.PayloadTypeText {
-			self.ConnectObj.RecvChatCallback(params.Peer.PeerId, string(data))
+			self.ConnectObj.RecvChatCallback(params.Peer.PeerId, string(payload))
 		} else if extHeader.AppId == consts.AppIdData {
-			self.ConnectObj.RecvDataCallback(self.ToPeerId, params.Peer.PeerId, string(data))
+			self.ConnectObj.RecvDataCallback(self.ToPeerId, params.Peer.PeerId, string(payload))
 		} else if extHeader.AppId == consts.AppIdIoT {
-			self.ConnectObj.RecvIoTCallback(string(data))
+			self.ConnectObj.RecvIoTCallback(string(payload))
 		} else if extHeader.AppId == consts.AppIdBlockChain {
-			self.ConnectObj.RecvBlockChainCallback(string(data))
+			self.ConnectObj.RecvBlockChainCallback(string(payload))
 		} else if extHeader.AppId == consts.AppIdMedia {
-			logger.Println(logger.INFO, self.ToPeerInstanceId, "Recv Media data:", len(data))
-			self.ConnectObj.RecvMediaCallback(params.Peer.PeerId, &data)
+			logger.Println(logger.INFO, self.ToPeerId, "Recv Media data:", len(payload))
+			self.ConnectObj.RecvMediaCallback(params.Peer.PeerId, &payload)
 		}
 
 		go self.ConnectObj.BroadcastData(&params, &data, &self.ToPeerId, true, true)
 	} else {
-		logger.Println(logger.ERROR, self.ToPeerInstanceId, "Recv data ext-header-len error:", params.ExtHeaderLen)
+		logger.Println(logger.ERROR, self.ToPeerId, "Recv data ext-header-len error:", params.ExtHeaderLen)
 	}
 }
 
 func (self *Peer) recvBroadcastDataResponse(res *connect.BroadcastDataResponse) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Recv broadcast data response:", res)
+	logger.Println(logger.WORK, self.ToPeerId, "Recv broadcast data response:", res)
 }
 
 func (self *Peer) sendBroadcastDataResponse() {
@@ -1287,7 +1395,7 @@ func (self *Peer) sendBroadcastDataResponse() {
 	msg := connect.GetPPMessage(res, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send broadcastData response:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send broadcastData response:", msg)
 }
 
 func (self *Peer) sendBuffermap(resChan *chan *connect.BuffermapResponse) {
@@ -1300,14 +1408,14 @@ func (self *Peer) sendBuffermap(resChan *chan *connect.BuffermapResponse) {
 	msg := connect.GetPPMessage(req, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send buffermap:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send buffermap:", msg)
 }
 
 func (self *Peer) recvBuffermap(req *connect.Buffermap) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "recv buffermap:", req)
+	logger.Println(logger.WORK, self.ToPeerId, "recv buffermap:", req)
 
 	if req.ReqParams.OverlayId != self.Info.OverlayInfo.OverlayId {
-		logger.Println(logger.ERROR, self.ToPeerInstanceId, "recv buffermap but ovid wrong:", req)
+		logger.Println(logger.ERROR, self.ToPeerId, "recv buffermap but ovid wrong:", req)
 		return
 	}
 
@@ -1319,16 +1427,16 @@ func (self *Peer) recvBuffermap(req *connect.Buffermap) {
 	msg := connect.GetPPMessage(res, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send buffermap response:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send buffermap response:", msg)
 }
 
 func (self *Peer) recvBuffermapResponse(res *connect.BuffermapResponse) {
 	defer recover()
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "recv buffermap response:", res)
+	logger.Println(logger.WORK, self.ToPeerId, "recv buffermap response:", res)
 
 	if res.RspParams.OverlayId != self.Info.OverlayInfo.OverlayId {
-		logger.Println(logger.ERROR, self.ToPeerInstanceId, "recv buffermap response but ovid wrong:", res)
+		logger.Println(logger.ERROR, self.ToPeerId, "recv buffermap response but ovid wrong:", res)
 		return
 	}
 
@@ -1347,14 +1455,14 @@ func (self *Peer) sendGetData(sourceId string, sequence int) {
 	msg := connect.GetPPMessage(req, nil)
 	self.sendPPMessage(msg)
 
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "Send GetData:", msg)
+	logger.Println(logger.WORK, self.ToPeerId, "Send GetData:", msg)
 }
 
 func (self *Peer) recvGetData(req *connect.GetData) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "recv GetData:", req)
+	logger.Println(logger.WORK, self.ToPeerId, "recv GetData:", req)
 
 	if req.OverlayId != self.Info.OverlayInfo.OverlayId {
-		logger.Println(logger.ERROR, self.ToPeerInstanceId, "recv GetData but ovid wrong:", req)
+		logger.Println(logger.ERROR, self.ToPeerId, "recv GetData but ovid wrong:", req)
 		return
 	}
 
@@ -1374,14 +1482,14 @@ func (self *Peer) recvGetData(req *connect.GetData) {
 		msg := connect.GetPPMessage(res, *payload.Payload)
 		self.sendPPMessage(msg)
 
-		logger.Println(logger.WORK, self.ToPeerInstanceId, "Send GetData response:", msg)
+		logger.Println(logger.WORK, self.ToPeerId, "Send GetData response:", msg)
 	} else {
-		logger.Println(logger.ERROR, self.ToPeerInstanceId, "recv GetData but don't have data")
+		logger.Println(logger.ERROR, self.ToPeerId, "recv GetData but don't have data")
 	}
 }
 
 func (self *Peer) recvGetDataResponse(res *connect.GetDataResponse, content []byte) {
-	logger.Println(logger.WORK, self.ToPeerInstanceId, "recv GetData response:", res)
+	logger.Println(logger.WORK, self.ToPeerId, "recv GetData response:", res)
 
 	self.recvData(&res.RspParams, content, false)
 }

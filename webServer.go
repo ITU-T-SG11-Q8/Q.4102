@@ -53,7 +53,7 @@ type HTTPServer struct {
 	OnTrack      func(toPeerId string, kind string, track *webrtc.TrackLocalStaticRTP)
 	GetTrack     func(kind string) *webrtc.TrackLocalStaticRTP
 	SendScanTree func() int
-	SendData     func(data *[]byte, appId string)
+	SendData     func(data *[]byte, appId string, candidatePath bool)
 
 	IsOwner func() bool
 	PeerId  string
@@ -319,7 +319,7 @@ func (server *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 			buf := []byte(chat.Message)
 
-			go server.SendData(&buf, consts.AppIdChat)
+			go server.SendData(&buf, consts.AppIdChat, false)
 
 			continue
 		} else if msgtype.Type == consts.TypeSendData {
@@ -330,7 +330,7 @@ func (server *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 			buf := []byte(data.Data)
 
-			go server.SendData(&buf, consts.AppIdData)
+			go server.SendData(&buf, consts.AppIdData, false)
 		} else if msgtype.Type == consts.TypeSdp {
 			sdp := Sdp{}
 			json.Unmarshal(p, &sdp)
@@ -381,7 +381,7 @@ func (server *HTTPServer) SendChat(msg string) {
 	server.wsBroadcast(wbuf)
 
 	buf := []byte(chat.Message)
-	go server.SendData(&buf, consts.AppIdChat)
+	go server.SendData(&buf, consts.AppIdChat, false)
 }
 
 func (server *HTTPServer) OverlayCreation(overlayId string) {

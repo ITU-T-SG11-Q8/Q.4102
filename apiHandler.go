@@ -483,11 +483,11 @@ func (handler *ApiHandler) overlayJoin(p graphql.ResolveParams) (interface{}, er
 	}
 
 	hoj.Peer.PeerId = (*handler.connectObj).PeerId()
-	hoj.Peer.Address = (*handler.connectObj).GetPeerInfo().Address
+	hoj.Peer.Address = (*handler.connectObj).PeerInfo().Address
 	if len(peerAuth) > 0 {
-		(*handler.connectObj).GetPeerInfo().Auth.Password = peerAuth
+		(*handler.connectObj).PeerInfo().Auth.Password = peerAuth
 	}
-	hoj.Peer.Auth = (*handler.connectObj).GetPeerInfo().Auth
+	hoj.Peer.Auth = (*handler.connectObj).PeerInfo().Auth
 	hoj.Peer.Expires = &expires
 	hoj.Peer.TicketId = &(*handler.connectObj).PeerInfo().TicketId
 
@@ -576,8 +576,8 @@ func (handler *ApiHandler) overlayRefresh(p graphql.ResolveParams) (interface{},
 	}
 
 	hor.Peer.PeerId = (*handler.connectObj).PeerId()
-	hor.Peer.Address = (*handler.connectObj).GetPeerInfo().Address
-	hor.Peer.Auth = (*handler.connectObj).GetPeerInfo().Auth
+	hor.Peer.Address = (*handler.connectObj).PeerInfo().Address
+	hor.Peer.Auth = (*handler.connectObj).PeerInfo().Auth
 
 	logger.PrintJson(logger.INFO, "refresh option:", hor)
 
@@ -772,7 +772,7 @@ func (handler *ApiHandler) configQuery() *graphql.Object {
 
 						info := connect.ApiPeerInfo{}
 						info.PeerId = (*handler.connectObj).PeerId()
-						info.NetworkAddress = (*handler.connectObj).GetPeerInfo().Address
+						info.NetworkAddress = (*handler.connectObj).PeerInfo().Address
 						info.OverlayNetwork.OverlayTitle = (*handler.connectObj).OverlayInfo().Title
 						info.OverlayNetwork.OverlayId = (*handler.connectObj).OverlayInfo().OverlayId
 						if (*handler.connectObj).PeerInfo().TicketId < 0 {
@@ -781,7 +781,7 @@ func (handler *ApiHandler) configQuery() *graphql.Object {
 							info.OverlayNetwork.TicketId = (*handler.connectObj).PeerInfo().TicketId
 						}
 						info.DebugLevel = logger.LEVEL
-						info.PeerAuth = (*handler.connectObj).GetPeerInfo().Auth.Password
+						info.PeerAuth = (*handler.connectObj).PeerInfo().Auth.Password
 
 						logger.Println(logger.INFO, "api config get:", info)
 
@@ -823,7 +823,7 @@ func (handler *ApiHandler) configMutation() *graphql.Object {
 						if ok {
 							logger.Println(logger.INFO, "api set peerauth:", auth)
 
-							(*handler.connectObj).GetPeerInfo().Auth.Password = auth
+							(*handler.connectObj).PeerInfo().Auth.Password = auth
 
 							return true, nil
 						}
